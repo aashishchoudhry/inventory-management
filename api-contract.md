@@ -135,6 +135,123 @@ All except `Id`, `CompanyId` and `Name` are nullable — `Code` in particular, s
 
 ---
 
+## `IQuotationService`
+
+`InventoryErp.Application/Interfaces/IQuotationService.cs`, implemented by
+`InventoryErp.Application/Services/QuotationService.cs`. Service layer only — no controller or view
+yet.
+
+### `CreateQuotationAsync`
+
+```csharp
+Task<ServiceResult<QuotationDto>> CreateQuotationAsync(
+    CreateQuotationRequest request,
+    CancellationToken cancellationToken = default);
+```
+
+Creates a quotation and its lines in a single save, computing every monetary figure server-side.
+
+#### Input — `CreateQuotationRequest`
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `CompanyId` | `Guid` | Required; `Guid.Empty` → `ValidationFailed` |
+| `CustomerId` | `Guid` | Required; must exist **within the company** |
+| `QuotationDate` | `DateTime` | Determines the number's year segment |
+| `ValidUntil` | `DateTime?` | Optional. Must not precede `QuotationDate` |
+| `Notes` | `string?` | Optional |
+| `Lines` | list | **At least one required** |
+
+Per line — `CreateQuotationLineRequest`:
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `ProductId` | `Guid` | Required; must exist within the company |
+| `Quantity` | `int` | **> 0** |
+| `UnitPrice` | `decimal` | ≥ 0 |
+| `DiscountPercent` | `decimal` | 0–100 |
+| `GstPercent` | `decimal` | ≥ 0 |
+
+**No monetary totals are accepted from the caller.** `SubTotal`, `TaxAmount`, `DiscountAmount` and
+`TotalAmount` are computed; a client cannot submit its own figures.
+
+`UnitPrice` and `GstPercent` *are* taken from the caller rather than read from the product, so a
+quotation can be issued at a negotiated price and keeps the figures it was issued with even after
+the product changes.
+
+#### Calculation
+
+Per line, in this order:
+
+```
+gross    = round(quantity × unitPrice)
+discount = round(gross × discountPercent / 100)
+taxable  = gross − discount
+tax      = round(taxable × gstPercent / 100)
+lineTotal = taxable + tax
+```
+
+Header totals are sums of the already-rounded line figures:
+
+```
+SubTotal       = Σ gross
+DiscountAmount = Σ discount
+TaxAmount      = Σ tax
+TotalAmount    = SubTotal − DiscountAmount + TaxAmount   ( = Σ lineTotal )
+```
+
+**GST is charged after discount, not on the gross.** This follows Indian GST practice, where tax is
+levied on the transaction value after any discount shown on the invoice. Taxing the gross would
+overstate tax on every discounted line — on a 1,000 line at 10% off and 18% GST, by 18.00.
+
+**Rounding is half-away-from-zero to 2 decimal places**, applied as each figure is produced — not
+.NET's default banker's rounding, which is not what invoices use. Because header totals sum
+already-rounded lines, the stored header always reconciles exactly with the stored lines.
+
+Worked example — qty 7 at 425.00, 12.5% discount, 12% GST:
+gross 2975.00 → discount 371.88 (371.875 rounded up) → taxable 2603.12 → tax 312.37 → **2915.49**.
+
+#### Quotation number
+
+Format **`QT-{yyyy}-{NNNN}`**, e.g. `QT-2026-0001`. Sequential **per company, per calendar year**.
+
+Chosen because it is human-readable and quotable over the phone; sorts chronologically as text;
+the year segment keeps sequences short and resets annually, which matches how businesses file
+documents; and per-company scoping matches the existing filtered unique index on
+`(CompanyId, QuotationNumber)`.
+
+The next value is derived from the **highest existing number**, not a row count — counting breaks
+as soon as anything is deleted.
+
+> **Known limitation.** Read-then-write is not atomic, so two concurrent creates could compute the
+> same number. The filtered unique index is the real guarantee; the service retries up to five
+> times and returns `Conflict` if it still cannot allocate. A database sequence would remove the
+> race and is the right fix if creation ever becomes concurrent.
+>
+> Because the unique index excludes soft-deleted rows, a soft-deleted number can be reissued.
+> Acceptable while nothing deletes quotations; revisit if that changes.
+
+#### Outputs
+
+| Status | When |
+| --- | --- |
+| `Success` | Created. `Data` is the `QuotationDto` including computed totals and all lines |
+| `ValidationFailed` | Malformed request. `ValidationErrors` lists every problem, line-level ones prefixed `Line N:` so the caller can point at the offending row |
+| `NotFound` | Customer or a referenced product does not exist in the company |
+| `Conflict` | No unique quotation number could be allocated after retries |
+
+Validation runs **before** any database write, and existence checks before any insert, so a rejected
+request writes nothing.
+
+Products belonging to another company read as `NotFound` rather than being usable — a tenant must
+not be able to quote another tenant's catalogue by guessing an id.
+
+`QuotationLineDto` also exposes `GrossAmount` and `DiscountAmount`, which are **computed, not
+persisted** — the `QuotationLine` entity stores only `TaxAmount` and `TotalAmount`. They are
+returned so a caller can render a line breakdown without recomputing it.
+
+---
+
 ## `ICurrentCompanyProvider`
 
 ```csharp

@@ -43,7 +43,7 @@ public sealed class CustomerService : ICustomerService
             orderBy: c => c.Name,
             pageNumber,
             pageSize,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return ServiceResult<PagedResult<CustomerDto>>.Success(page.Map(ToDto));
     }

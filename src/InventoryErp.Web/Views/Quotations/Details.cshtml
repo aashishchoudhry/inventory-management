@@ -1,0 +1,116 @@
+@using InventoryErp.Application.DTOs.Quotations
+@model QuotationDto
+@{
+    ViewData["Title"] = Model.QuotationNumber;
+    var expired = Model.ValidUntil is not null && Model.ValidUntil < DateTime.UtcNow.Date;
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">@Model.QuotationNumber</h2>
+        <p class="page-header__subtitle">@Model.CustomerName</p>
+    </div>
+    <div class="action-bar">
+        <a class="btn btn-outline-secondary" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left" /></svg>
+            Back
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-xl-8">
+        <div class="card mb-3">
+            <div class="card-header">Line items</div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col" class="cell-numeric">Qty</th>
+                            <th scope="col" class="cell-numeric">Unit price</th>
+                            <th scope="col" class="cell-numeric">Disc %</th>
+                            <th scope="col" class="cell-numeric">GST %</th>
+                            <th scope="col" class="cell-numeric">Tax</th>
+                            <th scope="col" class="cell-numeric">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Model.Lines)
+                        {
+                            <tr>
+                                <td>
+                                    <div>@line.ProductName</div>
+                                    <div class="small text-muted-app"><code>@line.ProductSku</code></div>
+                                </td>
+                                <td class="cell-numeric">@line.Quantity</td>
+                                <td class="cell-numeric">@line.UnitPrice.ToString("N2")</td>
+                                <td class="cell-numeric text-muted-app">@line.DiscountPercent.ToString("0.##")%</td>
+                                <td class="cell-numeric text-muted-app">@line.GstPercent.ToString("0.##")%</td>
+                                <td class="cell-numeric">@line.TaxAmount.ToString("N2")</td>
+                                <td class="cell-numeric fw-semibold">@line.TotalAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.Notes))
+        {
+            <div class="card">
+                <div class="card-header">Notes</div>
+                <div class="card-body">
+                    <p class="mb-0">@Model.Notes</p>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card mb-3">
+            <div class="card-header">Summary</div>
+            <div class="card-body">
+                <dl class="row definition-grid mb-0">
+                    <div class="col-6"><dt>Subtotal</dt><dd>@Model.SubTotal.ToString("N2")</dd></div>
+                    <div class="col-6"><dt>Discount</dt><dd>@Model.DiscountAmount.ToString("N2")</dd></div>
+                    <div class="col-6"><dt>GST</dt><dd>@Model.TaxAmount.ToString("N2")</dd></div>
+                    <div class="col-6">
+                        <dt>Total</dt>
+                        <dd class="stat-tile__value">@Model.TotalAmount.ToString("N2")</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Details</div>
+            <div class="card-body">
+                <dl class="row definition-grid mb-0">
+                    <div class="col-12"><dt>Customer</dt><dd>@Model.CustomerName</dd></div>
+                    <div class="col-6">
+                        <dt>Date</dt>
+                        <dd>@Model.QuotationDate.ToString("dd MMM yyyy")</dd>
+                    </div>
+                    <div class="col-6">
+                        <dt>Valid until</dt>
+                        <dd>
+                            @if (Model.ValidUntil is null)
+                            {
+                                <span class="text-muted-app">No expiry</span>
+                            }
+                            else
+                            {
+                                <span>@Model.ValidUntil.Value.ToString("dd MMM yyyy")</span>
+                                @if (expired)
+                                {
+                                    <span class="badge-pill badge-pill--warn ms-1">Expired</span>
+                                }
+                            }
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>

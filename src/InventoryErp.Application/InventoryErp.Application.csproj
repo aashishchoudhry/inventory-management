@@ -9,4 +9,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- So QuotationCalculator can be unit-tested directly without making an implementation
+         detail part of the public surface. -->
+    <InternalsVisibleTo Include="InventoryErp.Application.Tests" />
+  </ItemGroup>
+
 </Project>

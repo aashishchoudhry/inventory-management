@@ -192,6 +192,116 @@
         });
     }
 
+    /* ------------------------------------------------ quotation line editor */
+
+    function initQuotationLines() {
+        var body = document.querySelector('[data-lines-body]');
+        var template = document.getElementById('line-row-template');
+        if (!body || !template) { return; }
+
+        var addBtn = document.querySelector('[data-add-line]');
+        var noLines = document.querySelector('[data-no-lines]');
+        var defaults = {};
+
+        var defaultsEl = document.getElementById('product-defaults');
+        if (defaultsEl) {
+            try { defaults = JSON.parse(defaultsEl.textContent) || {}; } catch (e) { defaults = {}; }
+        }
+
+        function money(n) {
+            return (Math.round(n * 100) / 100).toFixed(2);
+        }
+
+        // Mirrors QuotationCalculator on the server: discount first, then GST on the
+        // discounted amount. This is a preview only — the server recalculates on save,
+        // and its result is authoritative.
+        function lineAmounts(row) {
+            var qty = parseFloat(row.querySelector('[data-line-qty]').value) || 0;
+            var price = parseFloat(row.querySelector('[data-line-price]').value) || 0;
+            var disc = parseFloat(row.querySelector('[data-line-discount]').value) || 0;
+            var gst = parseFloat(row.querySelector('[data-line-gst]').value) || 0;
+
+            var gross = Math.round(qty * price * 100) / 100;
+            var discount = Math.round(gross * disc / 100 * 100) / 100;
+            var taxable = gross - discount;
+            var tax = Math.round(taxable * gst / 100 * 100) / 100;
+
+            return { gross: gross, discount: discount, tax: tax, total: taxable + tax };
+        }
+
+        function recalculate() {
+            var rows = body.querySelectorAll('[data-line-row]');
+            var sub = 0, disc = 0, tax = 0, total = 0;
+
+            rows.forEach(function (row) {
+                var a = lineAmounts(row);
+                row.querySelector('[data-line-total]').textContent = money(a.total);
+                sub += a.gross; disc += a.discount; tax += a.tax; total += a.total;
+            });
+
+            var set = function (sel, v) {
+                var el = document.querySelector(sel);
+                if (el) { el.textContent = money(v); }
+            };
+
+            set('[data-sum-sub]', sub);
+            set('[data-sum-discount]', disc);
+            set('[data-sum-tax]', tax);
+            set('[data-sum-total]', total);
+
+            if (noLines) { noLines.hidden = rows.length !== 0; }
+        }
+
+        // Model binding needs a contiguous Lines[0..n]; renumber after every add or remove.
+        function renumber() {
+            body.querySelectorAll('[data-line-row]').forEach(function (row, i) {
+                row.querySelectorAll('[name]').forEach(function (field) {
+                    field.name = field.name.replace(/Lines\[[^\]]*\]/, 'Lines[' + i + ']');
+                });
+            });
+        }
+
+        function addRow() {
+            var frag = template.content.cloneNode(true);
+            body.appendChild(frag);
+            renumber();
+            recalculate();
+            var rows = body.querySelectorAll('[data-line-row]');
+            var select = rows[rows.length - 1].querySelector('[data-line-product]');
+            if (select) { select.focus(); }
+        }
+
+        if (addBtn) { addBtn.addEventListener('click', addRow); }
+
+        body.addEventListener('click', function (e) {
+            if (!e.target.closest('[data-remove-line]')) { return; }
+            e.target.closest('[data-line-row]').remove();
+            renumber();
+            recalculate();
+        });
+
+        // Picking a product prefills price and GST, but only into empty/zero fields so a
+        // manually negotiated price is never overwritten.
+        body.addEventListener('change', function (e) {
+            var select = e.target.closest('[data-line-product]');
+            if (!select) { return; }
+
+            var d = defaults[select.value];
+            if (d) {
+                var row = select.closest('[data-line-row]');
+                var price = row.querySelector('[data-line-price]');
+                var gst = row.querySelector('[data-line-gst]');
+                if (price && (!price.value || parseFloat(price.value) === 0)) { price.value = d.price; }
+                if (gst && (!gst.value || parseFloat(gst.value) === 0)) { gst.value = d.gst; }
+            }
+            recalculate();
+        });
+
+        body.addEventListener('input', recalculate);
+
+        recalculate();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -200,5 +310,6 @@
         initSubmitState();
         initDeleteConfirm();
         initAutoDismiss();
+        initQuotationLines();
     });
 })();

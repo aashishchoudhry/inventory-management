@@ -68,7 +68,7 @@ public sealed class ProductService : IProductService
             orderBy: p => p.Name,
             pageNumber,
             pageSize,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return ServiceResult<PagedResult<ProductDto>>.Success(page.Map(ToDto));
     }

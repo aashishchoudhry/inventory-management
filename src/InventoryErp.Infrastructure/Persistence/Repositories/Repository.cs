@@ -36,6 +36,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         Expression<Func<T, TKey>> orderBy,
         int pageNumber,
         int pageSize,
+        bool descending = false,
         CancellationToken cancellationToken = default)
     {
         var query = _set.AsNoTracking();
@@ -48,8 +49,9 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         // COUNT runs before Skip/Take so it reflects all matches, not just this page.
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var items = await query
-            .OrderBy(orderBy)
+        var ordered = descending ? query.OrderByDescending(orderBy) : query.OrderBy(orderBy);
+
+        var items = await ordered
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);

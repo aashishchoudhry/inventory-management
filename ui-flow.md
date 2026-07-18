@@ -188,6 +188,77 @@ Identical to Products: the pager appears only when there is more than one page, 
 disabled at the ends and carry `pageSize` through. Invalid arguments are rejected by the service
 rather than clamped.
 
+## Quotation screens
+
+Three screens, all under `QuotationsController`.
+
+```
+/Quotations                    list, newest first
+/Quotations/Create             GET form, POST submit
+/Quotations/Details/{id}       full quotation with lines
+```
+
+### Create — `/Quotations/Create`
+
+A customer dropdown, dates, notes, and a **dynamic line-item table**: add and remove rows
+client-side, each with product, quantity, unit price, discount % and GST %.
+
+| Behaviour | Detail |
+| --- | --- |
+| Add / remove rows | Vanilla JS clones a `<template>`. Field names are **renumbered to a contiguous `Lines[0..n]`** after every add or remove, so model binding never sees a gap |
+| Product prefill | Selecting a product fills unit price and GST from the product — but **only into empty or zero fields**, so a negotiated price is never overwritten |
+| Live total preview | Mirrors the server calculation (discount first, then GST). Labelled *"Preview only — the server recalculates on save"*, because it is |
+| Totals are never submitted | The form posts only quantities, prices and percentages. Every monetary figure is computed server-side |
+
+#### States
+
+| State | Appearance |
+| --- | --- |
+| **Initial** | One blank line, so the form is usable without clicking "Add line" first |
+| **Loading** | None — server-rendered. The submit button shows a spinner while in flight |
+| **No lines** | If every row is removed, an inline note appears: "No lines yet. Add at least one before saving." The server also rejects it |
+| **Validation error** | Re-renders the form with **all entered values preserved** — customer, dates, notes and every line. Line-level errors appear **next to the offending input**, not only in a summary |
+| **Success** | Redirects to the detail view with a flash: "Quotation QT-2026-0001 was created." |
+| **No company configured** | Error banner instead of the form |
+
+#### Error mapping
+
+`ServiceResult.ValidationErrors` entries prefixed `Line N:` are parsed and attached to that row's
+specific field, matched on the message text (quantity / product / unit price / discount / GST).
+Anything unrecognised falls back to the summary, so no error is ever silently dropped.
+
+Verified messages: *"Select a customer."*, *"A quotation must have at least one line."*,
+*"Quantity must be greater than zero."*, *"Discount percent must be between 0 and 100."*
+
+> `CustomerId` and `Lines[i].ProductId` are **nullable `Guid?`** in the form model. As non-nullable
+> `Guid` they failed model binding before `[Required]` could run, producing the framework's
+> unhelpful *"The value '' is invalid."* — exactly the generic message this screen is meant to avoid.
+
+### List — `/Quotations`
+
+Columns: number, customer, date, valid until, line count, total. Newest first — a quotation list is
+a work queue, not a reference table.
+
+| State | Appearance |
+| --- | --- |
+| **Success** | Table with "Showing 1–1 of 1" |
+| **Empty** | "No quotations yet" with a *New quotation* call to action |
+| **Page past the end** | "Page N is empty" with *Back to first page* |
+| **Error** | Red alert; table not rendered |
+
+### Details — `/Quotations/Details/{id}`
+
+Line table (product with SKU, qty, unit price, discount %, GST %, tax, total), a summary card
+(subtotal, discount, GST, total), a details card, and notes when present.
+
+| State | Appearance |
+| --- | --- |
+| **Success** | Full quotation. An expired `ValidUntil` shows an "Expired" pill |
+| **Not found / other tenant** | `404` — another company's quotation is indistinguishable from a non-existent one, so ids cannot be probed |
+| **Deleted product on a line** | Renders "(deleted product)" rather than failing |
+
+No PDF action yet — that is the next step.
+
 ## Product flow
 
 ```
@@ -219,6 +290,9 @@ rather than clamped.
 | `/Products/Edit/{id}` | `Edit.cshtml` | Same shape; `Id` and `CompanyId` hidden |
 | `/Products/Details/{id}` | `Details.cshtml` | Detail card with computed GST-inclusive price, a stock card, and a "Danger zone" delete behind a confirmation modal |
 | `/Customers` | `Customers/Index.cshtml` | Read-only paged table. See the dedicated section below |
+| `/Quotations` | `Quotations/Index.cshtml` | Paged list, newest first |
+| `/Quotations/Create` | `Quotations/Create.cshtml` | Dynamic line-item editor with live preview |
+| `/Quotations/Details/{id}` | `Quotations/Details.cshtml` | Full quotation with lines and totals |
 | `/Account/Login` | `Account/Login.cshtml` | Centred auth card. See states above |
 | `/Account/AccessDenied` | `Account/AccessDenied.cshtml` | Centred state with icon and route back |
 | `/Home/Privacy` | `Privacy.cshtml` | Placeholder content, styled consistently |
@@ -243,9 +317,9 @@ exists."* above the form rather than producing a stack trace.
 
 ## Navigation
 
-The sidebar is grouped: **Overview** (Dashboard), **Inventory** (Products), **Sales** (Customers).
-Active state is derived from `ViewContext.RouteData`, so a page added later highlights without
-editing the partial. Quotations and Company are deliberately absent — no controllers exist for them,
+The sidebar is grouped: **Overview** (Dashboard), **Inventory** (Products), **Sales** (Customers,
+Quotations). Active state is derived from `ViewContext.RouteData`, so a page added later highlights
+without editing the partial. Company settings is deliberately absent — no controller exists for it,
 and a nav link to a 404 is worse than no link.
 
 The top bar holds the drawer toggle (below `lg`), the page title, the theme toggle and the user

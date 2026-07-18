@@ -1,0 +1,234 @@
+@using InventoryErp.Web.Models
+@using System.Text.Json
+@model QuotationCreateViewModel
+@{
+    ViewData["Title"] = "New quotation";
+    var defaultsJson = JsonSerializer.Serialize(
+        Model.ProductDefaults.ToDictionary(
+            kv => kv.Key.ToString(),
+            kv => new { price = kv.Value.SellingPrice, gst = kv.Value.GstPercent }));
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">New quotation</h2>
+        <p class="page-header__subtitle">Totals are calculated on the server when you save</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index">
+        <svg class="icon" aria-hidden="true"><use href="#i-arrow-left" /></svg>
+        Back to quotations
+    </a>
+</div>
+
+<form asp-action="Create" method="post" data-busy-submit id="quotation-form">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"
+         style="@(ViewData.ModelState[string.Empty]?.Errors.Count > 0 ? "" : "display:none")"></div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="card mb-3">
+                <div class="card-header">Details</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label asp-for="CustomerId" class="form-label"></label>
+                            <select asp-for="CustomerId" asp-items="Model.CustomerOptions"
+                                    class="form-select">
+                                <option value="">Select a customer…</option>
+                            </select>
+                            <span asp-validation-for="CustomerId" class="text-danger small"></span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label asp-for="QuotationDate" class="form-label"></label>
+                            <input asp-for="QuotationDate" type="date" class="form-control" />
+                            <span asp-validation-for="QuotationDate" class="text-danger small"></span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label asp-for="ValidUntil" class="form-label"></label>
+                            <input asp-for="ValidUntil" type="date" class="form-control" />
+                            <span asp-validation-for="ValidUntil" class="text-danger small"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span>Line items</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-add-line>
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-plus" /></svg>
+                        Add line
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table" id="lines-table">
+                        <thead>
+                            <tr>
+                                <th scope="col" style="min-width: 12rem;">Product</th>
+                                <th scope="col" style="width: 6rem;">Qty</th>
+                                <th scope="col" style="width: 8rem;">Unit price</th>
+                                <th scope="col" style="width: 6rem;">Disc %</th>
+                                <th scope="col" style="width: 6rem;">GST %</th>
+                                <th scope="col" class="cell-numeric" style="width: 8rem;">Line total</th>
+                                <th scope="col" style="width: 3rem;"><span class="visually-hidden">Remove</span></th>
+                            </tr>
+                        </thead>
+                        <tbody data-lines-body>
+                            @for (var i = 0; i < Model.Lines.Count; i++)
+                            {
+                                var line = Model.Lines[i];
+                                <tr data-line-row>
+                                    <td>
+                                        @* Options rendered manually so the current selection
+                                           survives a failed post without needing JavaScript. *@
+                                        <select name="Lines[@i].ProductId" class="form-select form-select-sm"
+                                                data-line-product>
+                                            <option value="">Select…</option>
+                                            @foreach (var option in Model.ProductOptions)
+                                            {
+                                                if (option.Value == line.ProductId.ToString())
+                                                {
+                                                    <option value="@option.Value" selected>@option.Text</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@option.Value">@option.Text</option>
+                                                }
+                                            }
+                                        </select>
+                                        <span class="text-danger small"
+                                              asp-validation-for="Lines[i].ProductId"></span>
+                                    </td>
+                                    <td>
+                                        <input name="Lines[@i].Quantity" value="@line.Quantity"
+                                               type="number" min="1" step="1"
+                                               class="form-control form-control-sm" data-line-qty />
+                                        <span class="text-danger small"
+                                              asp-validation-for="Lines[i].Quantity"></span>
+                                    </td>
+                                    <td>
+                                        <input name="Lines[@i].UnitPrice" value="@line.UnitPrice"
+                                               type="number" min="0" step="0.01"
+                                               class="form-control form-control-sm" data-line-price />
+                                        <span class="text-danger small"
+                                              asp-validation-for="Lines[i].UnitPrice"></span>
+                                    </td>
+                                    <td>
+                                        <input name="Lines[@i].DiscountPercent" value="@line.DiscountPercent"
+                                               type="number" min="0" max="100" step="0.01"
+                                               class="form-control form-control-sm" data-line-discount />
+                                        <span class="text-danger small"
+                                              asp-validation-for="Lines[i].DiscountPercent"></span>
+                                    </td>
+                                    <td>
+                                        <input name="Lines[@i].GstPercent" value="@line.GstPercent"
+                                               type="number" min="0" step="0.01"
+                                               class="form-control form-control-sm" data-line-gst />
+                                        <span class="text-danger small"
+                                              asp-validation-for="Lines[i].GstPercent"></span>
+                                    </td>
+                                    <td class="cell-numeric align-middle" data-line-total>0.00</td>
+                                    <td class="align-middle">
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-icon"
+                                                data-remove-line aria-label="Remove line">
+                                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash" /></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="empty-state py-4" data-no-lines hidden>
+                    <p class="empty-state__text mb-0">
+                        No lines yet. Add at least one before saving.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="card mb-3">
+                <div class="card-header">Summary</div>
+                <div class="card-body">
+                    @* Preview only. The server recalculates every figure on save — these numbers
+                       are never submitted. *@
+                    <dl class="row definition-grid mb-2">
+                        <div class="col-6"><dt>Subtotal</dt><dd data-sum-sub>0.00</dd></div>
+                        <div class="col-6"><dt>Discount</dt><dd data-sum-discount>0.00</dd></div>
+                        <div class="col-6"><dt>GST</dt><dd data-sum-tax>0.00</dd></div>
+                        <div class="col-6"><dt>Total</dt><dd class="fw-bold" data-sum-total>0.00</dd></div>
+                    </dl>
+                    <p class="form-hint mb-0">Preview only — the server recalculates on save.</p>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Notes</div>
+                <div class="card-body">
+                    <label asp-for="Notes" class="visually-hidden"></label>
+                    <textarea asp-for="Notes" class="form-control" rows="4"
+                              placeholder="Optional notes for the customer"></textarea>
+                    <span asp-validation-for="Notes" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body action-bar">
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
+                        Create quotation
+                    </button>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@* Template for a new row. Indices are renumbered by site.js after every add or remove, so
+   model binding always sees a contiguous Lines[0..n] sequence. *@
+<template id="line-row-template">
+    <tr data-line-row>
+        <td>
+            <select name="Lines[__i__].ProductId" class="form-select form-select-sm" data-line-product>
+                <option value="">Select…</option>
+                @foreach (var option in Model.ProductOptions)
+                {
+                    <option value="@option.Value">@option.Text</option>
+                }
+            </select>
+        </td>
+        <td>
+            <input name="Lines[__i__].Quantity" value="1" type="number" min="1" step="1"
+                   class="form-control form-control-sm" data-line-qty />
+        </td>
+        <td>
+            <input name="Lines[__i__].UnitPrice" value="0" type="number" min="0" step="0.01"
+                   class="form-control form-control-sm" data-line-price />
+        </td>
+        <td>
+            <input name="Lines[__i__].DiscountPercent" value="0" type="number" min="0" max="100" step="0.01"
+                   class="form-control form-control-sm" data-line-discount />
+        </td>
+        <td>
+            <input name="Lines[__i__].GstPercent" value="0" type="number" min="0" step="0.01"
+                   class="form-control form-control-sm" data-line-gst />
+        </td>
+        <td class="cell-numeric align-middle" data-line-total>0.00</td>
+        <td class="align-middle">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-icon"
+                    data-remove-line aria-label="Remove line">
+                <svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash" /></svg>
+            </button>
+        </td>
+    </tr>
+</template>
+
+<script id="product-defaults" type="application/json">@Html.Raw(defaultsJson)</script>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

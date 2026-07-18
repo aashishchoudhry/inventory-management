@@ -29,6 +29,7 @@ public interface IRepository<T> where T : BaseEntity
         Expression<Func<T, TKey>> orderBy,
         int pageNumber,
         int pageSize,
+        bool descending = false,
         CancellationToken cancellationToken = default);
 
     Task<bool> AnyAsync(

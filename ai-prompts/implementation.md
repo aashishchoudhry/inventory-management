@@ -796,3 +796,223 @@ Followed the pattern established by Products, reusing everything rather than re-
 - No customer detail view — the list shows five fields; `Address` is mapped in the DTO but not
   displayed anywhere.
 - Tenant isolation still depends on callers passing the right `companyId`.
+
+---
+
+## 2026-07-18 — Quotations service layer
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now start the Quotations feature — service layer only for this step, no UI yet.
+>
+> In InventoryErp.Application, add IQuotationService/QuotationService returning ServiceResult<T>.
+> Implement CreateQuotation(companyId, customerId, quotationDate, validUntil, notes, List<line
+> items: productId, quantity, unitPrice, discountPercent, gstPercent>)
+>
+> Server-side logic:
+> - Compute each line's taxAmount and totalAmount from quantity, unitPrice, discountPercent, gstPercent
+> - Sum lines into the Quotation's subTotal, taxAmount, discountAmount, totalAmount
+> - Generate a quotationNumber (your call on format, tell me what you chose and why)
+> - Reject and return a failure ServiceResult if: customerId doesn't exist, there are zero line
+>   items, any line has quantity <= 0, or any productId doesn't exist
+>
+> Don't build the controller or Razor view yet. Just the service, its DTOs, and enough for me to
+> verify the calculation logic works.
+>
+> Then update api-contract.md and ai-prompts/implementation.md. Don't update acceptance-criteria.md
+> yet — nothing there is satisfied until the UI exists.
+
+### What Claude Code did
+
+- `CreateQuotationRequest` / `CreateQuotationLineRequest`, `QuotationDto` / `QuotationLineDto`,
+  `IQuotationService`, `QuotationService` — all in Application, depending only on `IUnitOfWork`.
+- **Extracted the arithmetic into `QuotationCalculator`**, a small internal static class with no
+  persistence dependency, so the money maths can be tested and reasoned about on its own.
+  `InternalsVisibleTo` exposes it to the test project rather than making it public API.
+- Extended `IRepository<T>.ListPagedAsync` with a `descending` flag, needed to find the highest
+  existing quotation number. Three existing call sites were updated to name the
+  `cancellationToken` argument.
+- **33 new tests**, taking the suite from 41 to 74: 8 on the calculator alone, 25 on the service.
+
+### Decisions
+
+**GST is charged after discount, not on the gross.** This is the single most consequential choice
+here and the prompt did not specify it. Indian GST is levied on the transaction value after any
+discount shown on the invoice. On a 1,000 line at 10% off and 18% GST the difference is 162 versus
+180 — an 18.00 overstatement per line, every line. There is a test named for this specifically.
+
+**Rounding is half-away-from-zero to 2dp**, applied as each figure is produced. .NET's default is
+banker's rounding, which is not what invoices use. Header totals sum already-rounded line figures,
+so the stored header always reconciles exactly with the stored lines — no cent-level drift between
+a quotation and the sum of its rows.
+
+**Quotation number: `QT-{yyyy}-{NNNN}`**, sequential per company per year. Human-readable and
+quotable over the phone; sorts chronologically as text; the year segment keeps sequences short and
+resets annually; per-company scoping matches the existing unique index. Derived from the highest
+existing number rather than a row count, because counting breaks the moment anything is deleted.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Build | Clean, 0 warnings |
+| Tests | **74/74 passing** |
+| Calculation, no discount/tax | 3 × 100 → 300.00 |
+| Discount then GST | 10 × 100, 10% off, 18% → gross 1000, disc 100, tax 162, total 1062 |
+| GST slabs 5/12/18/28 | All round correctly to 2dp |
+| Half-up rounding | 2.50 at 5% → tax 0.13, not 0.12 |
+| Header reconciles with lines | Asserted across a 3-line quotation with mixed rates |
+| Number sequence | 0001 → 0002 → 0003; resets per year; independent per company |
+| Rejections | No lines, qty ≤ 0, negative price, discount outside 0–100, valid-until before date |
+| Missing refs | Unknown customer and unknown product both → `NotFound`, nothing written |
+| Cross-tenant | Another company's customer/product read as `NotFound` |
+
+Expected values in the tests were checked by hand rather than copied from the implementation —
+e.g. 7 × 425.00 at 12.5% and 12%: gross 2975.00, discount 371.875 → 371.88, taxable 2603.12,
+tax 312.3744 → 312.37, total 2915.49.
+
+### Accepted
+
+- **Totals are never accepted from the caller.** The request has no monetary total fields at all,
+  so a client cannot submit its own figures.
+- **`UnitPrice` and `GstPercent` come from the caller, not the product.** A quotation must be
+  issuable at a negotiated price and must keep the figures it was issued with.
+- **Validation before any write**, and existence checks before any insert, so a rejected request
+  leaves the database untouched. A test asserts this.
+- **Line-level errors are prefixed `Line N:`** so a future UI can point at the offending row.
+
+### Changed beyond the request
+
+- **Cross-tenant references read as `NotFound`.** The prompt said "customerId doesn't exist"; a
+  customer belonging to another company is treated as not existing rather than usable, otherwise
+  one tenant could quote another's catalogue by guessing an id.
+- **Extra validation not asked for:** negative unit price, discount outside 0–100, negative GST,
+  and `ValidUntil` earlier than `QuotationDate`. Each would otherwise produce a silently wrong
+  document.
+- **`descending` added to `ListPagedAsync`** — needed to read the highest existing number.
+
+### Rejected
+
+- No controller, view or `acceptance-criteria.md` update — explicitly out of scope for this step.
+- Did not add a `QuotationStatus` lifecycle. Still flagged as missing, but inventing one now would
+  pre-empt a decision that has not been made.
+
+### Open items after this step
+
+- **Number allocation has a race.** Read-then-write is not atomic; the unique index is the real
+  guarantee and the service retries five times before returning `Conflict`. A database sequence is
+  the proper fix if creation becomes concurrent.
+- **Numbers can be reused after a soft delete**, since the unique index excludes deleted rows.
+- No read, update or delete methods on the service — creation only.
+- Quotations have no status/lifecycle field.
+- Creating a quotation does **not** decrement product stock; whether it should is undecided.
+
+---
+
+## 2026-07-18 — Quotations UI
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now add the UI for creating a quotation, using the QuotationService from the last step.
+>
+> In InventoryErp.Web, add QuotationsController with a Create action (GET shows the form, POST
+> submits) and a Razor view: customer dropdown, and a dynamic line-item table (add/remove rows
+> client-side) with product dropdown, quantity, unit price, discount%, GST%. On submit, call
+> CreateQuotation and show the ServiceResult's errors inline if it fails (e.g. zero quantity, no
+> customer selected) — don't just show a generic error page.
+>
+> Also add the List action + view (table of quotations: number, customer, date, total) and a Details
+> action + view (full quotation with line items) — no PDF yet, that's the next step.
+>
+> Then update ui-flow.md, acceptance-criteria.md, ai-prompts/implementation.md.
+> Test manually: create a quotation with 2+ line items, try submitting one with zero quantity and
+> confirm it's rejected with a clear message, before committing.
+
+### What Claude Code did
+
+**Extended the service first.** List and detail need data the service did not expose, so
+`GetAllAsync` and `GetByIdAsync` were added, along with `CustomerName` / `ProductName` /
+`ProductSku` on the DTOs and a `QuotationListItemDto`. Because the entities have no navigation
+properties, names are resolved with one batched lookup per page rather than per row.
+
+Also **refactored create**: product existence was checked with one `AnyAsync` per line; it now
+fetches all referenced products in a single query and reuses them for both validation and naming.
+
+**Web layer:** `QuotationsController` (Index / Details / Create GET+POST), three Razor views, and
+a `QuotationCreateViewModel` separate from `CreateQuotationRequest` — MVC binding needs a mutable
+`List<T>` and the view needs dropdown options.
+
+**Dynamic line editor** in `site.js`: clones a `<template>`, renumbers field names to a contiguous
+`Lines[0..n]` after every add or remove, prefills price and GST from the selected product without
+overwriting non-zero values, and shows a live total preview that mirrors the server calculation.
+
+**Inline error mapping:** `Line N:` prefixed errors are parsed and attached to that row's specific
+field, matched on message text. Unrecognised errors fall back to the summary so none is dropped.
+
+11 new tests, taking the suite from 74 to **85**.
+
+### A real UX bug found while testing
+
+Submitting with no customer produced **"The value '' is invalid."** — the framework's model-binding
+message, not the `[Required]` message. A non-nullable `Guid` fails binding before validation runs.
+Fixed by making `CustomerId` and `Lines[i].ProductId` nullable `Guid?`, after which the intended
+"Select a customer." appears. This was precisely the generic message the prompt asked to avoid, and
+it would have shipped unnoticed without posting the empty case directly.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Two-line quotation via browser | `QT-2026-0001` created, redirected to detail with a flash |
+| Server totals | subtotal 1990.00, discount 24.50, GST 126.94, total 2092.44 — confirmed by SQL |
+| Client preview vs server | Identical (2092.44) |
+| Add / remove rows | Renumbered to contiguous `Lines[0..n]` |
+| Product prefill | Price and GST filled; a manually set price is not overwritten |
+| **Zero quantity** | Rejected — "Quantity must be greater than zero." shown **inline on that row** |
+| No customer | "Select a customer." |
+| Zero lines | "A quotation must have at least one line." |
+| 150% discount | "Discount percent must be between 0 and 100." |
+| Form state after failure | Customer, dates, notes and all lines preserved |
+| Nothing written on failure | Database stayed at 1 quotation / 2 lines throughout |
+| List and detail | Both render correctly; cross-tenant detail returns 404 |
+| Console errors | None |
+| Build / tests | Clean, 0 warnings; **85/85 passing** |
+
+### Accepted
+
+- **Totals are never posted.** The form submits only quantities, prices and percentages; every
+  monetary figure is computed server-side. The preview is explicitly labelled as such.
+- **Line-level errors land on the offending input**, not just a summary — the prompt asked for
+  inline errors and a summary alone would not have satisfied it.
+- **Failed posts preserve everything the user typed.** Losing a ten-line quotation to one bad
+  quantity would be worse than the original error.
+- **Renumbering on every add/remove**, so removing row 2 of 3 does not leave `Lines[0], Lines[2]`
+  and silently drop a line at the model binder.
+
+### Changed beyond the request
+
+- **Added `GetAllAsync` / `GetByIdAsync` to the service** — the prompt asked for List and Details
+  actions, which cannot exist without them.
+- **Batched name lookups** rather than per-row queries.
+- **Sidebar link and an `i-file` icon**, otherwise the feature is reachable only by typing the URL.
+- **Nullable `Guid?` on the form model**, for the binding reason above.
+
+### Rejected
+
+- No PDF action — explicitly next step.
+- No edit or delete for quotations; not requested, and an issued quotation arguably should not be
+  silently editable.
+- Did not make the client preview authoritative: it is a convenience, and the server recalculates
+  regardless.
+
+### Open items after this step
+
+- Quotations still have no status/lifecycle (draft / sent / accepted / expired). The detail view
+  infers "Expired" from `ValidUntil` alone.
+- No edit, delete or duplicate action.
+- The number-allocation race from the previous step is unchanged.
+- Creating a quotation still does not affect stock.

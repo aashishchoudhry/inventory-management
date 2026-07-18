@@ -15,6 +15,9 @@
 | 5 | Invalid credentials produce a clear error, not a crash | **Met** | 2026-07-18 |
 | 6 | A user can list and search products from the database | **Met** | 2026-07-18 |
 | 7 | A user can list customers from the database | **Met** | 2026-07-18 |
+| 8 | A user can create a quotation with multiple line items via the UI | **Met** | 2026-07-18 |
+| 9 | A user can view the quotation list and open a detail view | **Met** | 2026-07-18 |
+| 10 | Backend validation rejects invalid quotations | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -110,6 +113,49 @@ scoped to the company via `ICurrentCompanyProvider`.
 
 Covered by 11 unit tests, including ordering, tenant isolation (a company sees only its own
 customers), exclusion of soft-deleted rows, and null-code handling.
+
+### 8. A user can create a quotation with multiple line items via the UI
+
+Created `QT-2026-0001` for Bengal Textile Mills with **two lines** through the browser:
+
+| Line | Product | Qty | Unit price | Disc % | GST % | Tax | Total |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Hex Bolt M10 x 50mm | 10 | 24.50 | 10 | 18 | 39.69 | 260.19 |
+| 2 | Safety Helmet (Yellow) | 5 | 349.00 | 0 | 5 | 87.25 | 1,832.25 |
+
+Persisted header, confirmed by direct SQL: subtotal **1990.00**, discount **24.50**,
+GST **126.94**, total **2092.44**. The client-side preview showed the same total before submit,
+and the server figure is the one stored.
+
+Also verified: adding and removing rows renumbers fields to a contiguous `Lines[0..n]`; selecting a
+product prefills its price and GST without overwriting a manually entered price.
+
+### 9. A user can view the quotation list and open a detail view
+
+`/Quotations` lists number, customer, date, valid-until, line count and total, newest first, headed
+"Showing 1–1 of 1". The **View** action opens `/Quotations/Details/{id}`, showing both lines with
+product names and SKUs, per-line tax and totals, and the summary card.
+
+Another company's quotation returns `404` rather than a permission error, so ids cannot be probed
+for existence.
+
+### 10. Backend validation rejects invalid quotations
+
+Each posted directly to the server, bypassing client-side checks, so it is the **backend** under
+test. Every one re-rendered the form with entered values preserved:
+
+| Attempt | Message shown |
+| --- | --- |
+| No customer selected | "Select a customer." |
+| Zero line items | "A quotation must have at least one line." |
+| Quantity of 0 | "Quantity must be greater than zero." — inline, next to that row's Qty field |
+| Discount of 150% | "Discount percent must be between 0 and 100." |
+
+**Nothing was written for any rejected attempt** — the database held exactly 1 quotation and 2 lines
+throughout, confirmed by SQL.
+
+Covered additionally by 25 service-level tests including unknown customer, unknown product, negative
+price, cross-tenant references, and `ValidUntil` earlier than the quotation date.
 
 ## Not yet stated
 

@@ -26,7 +26,7 @@ public sealed class CurrentCompanyProvider : ICurrentCompanyProvider
 
         var companies = await _unitOfWork
             .Repository<Company>()
-            .ListPagedAsync(predicate: null, orderBy: c => c.CreatedAtUtc, pageNumber: 1, pageSize: 1, cancellationToken);
+            .ListPagedAsync(predicate: null, orderBy: c => c.CreatedAtUtc, pageNumber: 1, pageSize: 1, cancellationToken: cancellationToken);
 
         _cached = companies.Items.Count > 0 ? companies.Items[0].Id : null;
         return _cached;

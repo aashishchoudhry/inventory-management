@@ -39,9 +39,14 @@
             <svg class="icon" aria-hidden="true"><use href="#i-users" /></svg>
             <span>Customers</span>
         </a>
+        <a class="@NavClass("Quotations")" aria-current="@NavCurrent("Quotations")"
+           asp-controller="Quotations" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-file" /></svg>
+            <span>Quotations</span>
+        </a>
     </nav>
 
-    @* Quotations and Company are intentionally absent: no controllers exist for them yet,
-       and a nav link to a 404 is worse than no link. *@
+    @* Company settings is intentionally absent: no controller exists for it yet, and a nav
+       link to a 404 is worse than no link. *@
     <div class="app-sidebar__footer">Core scope</div>
 </aside>
