@@ -715,3 +715,84 @@ distinct empty/error states. Added 16 tests, taking the suite from 14 to 30.
   gets slow.
 - Tenant isolation still depends on callers passing the right `companyId`; there is no global
   query filter enforcing it.
+
+---
+
+## 2026-07-18 — Customers list
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now build the Customers feature — list only, no create/edit (Stretch scope per the guide).
+>
+> In InventoryErp.Application, add ICustomerService/CustomerService returning ServiceResult<T>, no
+> DbContext usage outside Infrastructure. Implement GetAll(companyId) — scoped to the seeded company,
+> paged if it makes sense with the seed data size.
+>
+> In InventoryErp.Web, add CustomersController + a Razor view with a table (name, code, mobile, city,
+> state). Handle the empty-results case cleanly.
+>
+> Then update api-contract.md, ui-flow.md, acceptance-criteria.md, ai-prompts/implementation.md.
+> Test manually before committing.
+
+### What Claude Code did
+
+Followed the pattern established by Products, reusing everything rather than re-inventing it:
+
+- `CustomerDto`, `ICustomerService`, `CustomerService` in Application, registered in
+  `AddApplication`. Depends only on `IUnitOfWork`.
+- Reused `PagedResult<T>` and `IRepository<T>.ListPagedAsync` from the Products step — paging and
+  `COUNT` run in the database; no new infrastructure was needed.
+- Reused `ICurrentCompanyProvider` for tenant scoping.
+- `CustomersController` + `Views/Customers/Index.cshtml`, mirroring the Products view's state
+  handling.
+- **Added the Customers link to the sidebar** under a new "Sales" group. It had been deliberately
+  omitted while no controller existed; now one does.
+- Added an `i-users` icon to the sprite (only `i-user`, singular, existed).
+- 11 new tests, taking the suite from 30 to 41.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Listing | All 7 seeded customers, ordered by name, "Showing 1–7 of 7" |
+| Null `Code` / `Mobile` | "Walk-in / Counter Sales" renders em-dashes |
+| Paging | `pageSize=3` → 1–3 of 7, "Page 1 of 3"; page 2 → 4–6 |
+| Page past the end | `page=4` → "Page 4 is empty" |
+| Invalid paging | `page=0` → "Page number must be 1 or greater." |
+| Sidebar | Link present, highlights when active |
+| Console errors | None |
+| Build / tests | Clean, 0 warnings; **41/41 passing** |
+
+### Accepted
+
+- **Paging included despite only 7 seeded customers.** The prompt said "paged if it makes sense" —
+  the infrastructure already existed, so it cost nothing, and a customer list is exactly the kind
+  that grows. The pager stays hidden at the default page size of 20, so there is no visible clutter.
+- **Read-only means one method.** `ICustomerService` exposes only `GetAllAsync` rather than stubs
+  that throw. The interface states the scope.
+- **No call-to-action on the empty state.** The Products empty state offers "New product"; this one
+  cannot, because there is no create screen. Offering a button that goes nowhere would be worse
+  than none.
+- **No search box**, unlike Products — it was not in scope, and an input that filters nothing is
+  worse than no input.
+
+### Changed beyond the request
+
+- **Sidebar navigation updated.** Not mentioned in the prompt, but leaving the link out would have
+  made the feature unreachable except by typing the URL.
+- **New `i-users` sprite icon** for the nav item.
+
+### Rejected
+
+- No create, edit or delete — explicitly Stretch scope.
+- Did not duplicate the paging helpers for customers; the generic `IRepository<T>` method already
+  covers any entity.
+
+### Open items after this step
+
+- No search or filtering on customers.
+- No customer detail view — the list shows five fields; `Address` is mapped in the DTO but not
+  displayed anywhere.
+- Tenant isolation still depends on callers passing the right `companyId`.

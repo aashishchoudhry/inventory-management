@@ -32,9 +32,16 @@
             <svg class="icon" aria-hidden="true"><use href="#i-box" /></svg>
             <span>Products</span>
         </a>
+
+        <p class="app-sidebar__heading">Sales</p>
+        <a class="@NavClass("Customers")" aria-current="@NavCurrent("Customers")"
+           asp-controller="Customers" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-users" /></svg>
+            <span>Customers</span>
+        </a>
     </nav>
 
-    @* Customers, Quotations and Company are intentionally absent: no controllers exist for
-       them yet, and a nav link to a 404 is worse than no link. *@
+    @* Quotations and Company are intentionally absent: no controllers exist for them yet,
+       and a nav link to a 404 is worse than no link. *@
     <div class="app-sidebar__footer">Core scope</div>
 </aside>

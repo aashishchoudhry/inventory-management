@@ -14,6 +14,7 @@
 | 4 | Protected pages are inaccessible when signed out | **Met** | 2026-07-18 |
 | 5 | Invalid credentials produce a clear error, not a crash | **Met** | 2026-07-18 |
 | 6 | A user can list and search products from the database | **Met** | 2026-07-18 |
+| 7 | A user can list customers from the database | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -90,6 +91,25 @@ past the end, and invalid paging arguments.
 
 Covered by 30 passing unit tests, including tenant isolation (a search does not return another
 company's products) and exclusion of soft-deleted rows.
+
+### 7. A user can list customers from the database
+
+`/Customers` renders all 7 seeded customers ordered by name, headed "Showing 1–7 of 7", with name,
+code, mobile, city and state. Data comes from SQL Server through `CustomerService.GetAllAsync`,
+scoped to the company via `ICurrentCompanyProvider`.
+
+| Check | Result |
+| --- | --- |
+| All seeded customers listed | 7 of 7, ordered by name |
+| Null `Code` / `Mobile` | "Walk-in / Counter Sales" renders em-dashes, not blanks or errors |
+| Paging | `pageSize=3` → "Showing 1–3 of 7", "Page 1 of 3"; page 2 → 4–6 |
+| Page past the end | `page=4` → "Page 4 is empty · There are only 7 customers in this list" |
+| Invalid paging | `page=0` → "Page number must be 1 or greater." |
+| Sidebar | Customers link present under Sales, highlights when active |
+| Console errors | None |
+
+Covered by 11 unit tests, including ordering, tenant isolation (a company sees only its own
+customers), exclusion of soft-deleted rows, and null-code handling.
 
 ## Not yet stated
 

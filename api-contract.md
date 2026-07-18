@@ -98,6 +98,43 @@ search becomes slow.
 
 ---
 
+## `ICustomerService`
+
+`InventoryErp.Application/Interfaces/ICustomerService.cs`, implemented by
+`InventoryErp.Application/Services/CustomerService.cs`. Same constraints as `IProductService` —
+depends only on `IUnitOfWork` / `IRepository<T>`, no EF Core type reaches this layer.
+
+### `GetAllAsync`
+
+```csharp
+Task<ServiceResult<PagedResult<CustomerDto>>> GetAllAsync(
+    Guid companyId,
+    int pageNumber = 1,
+    int pageSize = 20,
+    CancellationToken cancellationToken = default);
+```
+
+One page of customers for a company, ordered by name ascending.
+
+| Input | Rules |
+| --- | --- |
+| `companyId` | Required. `Guid.Empty` → `ValidationFailed` |
+| `pageNumber` | 1-based. `< 1` → `ValidationFailed` |
+| `pageSize` | `< 1` or `> 200` → `ValidationFailed` |
+
+**Returns:** `Success` with `PagedResult<CustomerDto>`. Scoped to `companyId`; soft-deleted
+customers are excluded by the global query filter. A page beyond the last returns zero items with
+`TotalCount` still reflecting the full count. An empty list is `Success`, not `NotFound`.
+
+**`CustomerDto`:** `Id`, `CompanyId`, `Name`, `Code`, `Mobile`, `City`, `State`, `Address`.
+All except `Id`, `CompanyId` and `Name` are nullable — `Code` in particular, since the seeded
+"Walk-in / Counter Sales" customer deliberately has none.
+
+> **Read-only by design.** There is no create, update or delete: customer maintenance is Stretch
+> scope. The service exposes exactly one method rather than stubs that throw.
+
+---
+
 ## `ICurrentCompanyProvider`
 
 ```csharp

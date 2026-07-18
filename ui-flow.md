@@ -151,6 +151,43 @@ Invalid arguments are **rejected by the service, not clamped by the controller**
 "Page number must be 1 or greater." rather than silently showing page 1, so the user learns what
 happened.
 
+## Customers screen
+
+`/Customers` — `CustomersController.Index` + `Views/Customers/Index.cshtml`.
+
+**Read-only.** No create, edit, delete or row actions — customer maintenance is Stretch scope, and
+the screen does not hint at actions that do not exist.
+
+```
+/Customers                     all customers, page 1
+/Customers?page=2              page 2
+/Customers?pageSize=3          explicit page size (max 200)
+```
+
+### Columns
+
+Name, code, mobile, city, state. Code and mobile show an em-dash when absent — the seeded
+"Walk-in / Counter Sales" customer has neither, which exercises that path.
+
+### States
+
+| State | Appearance |
+| --- | --- |
+| **Success** | Table ordered by name. Header reads "Showing 1–7 of 7" |
+| **Loading** | None — server-rendered, so there is no intermediate state |
+| **Empty — no customers** | `_EmptyState` partial: "No customers yet". **No call-to-action button**, since there is no create screen to link to |
+| **Empty — page past the end** | "Page 4 is empty · There are only 7 customers in this list" with *Back to first page* |
+| **Error** | Red alert; the table is not rendered. Covers no company configured, and invalid paging |
+
+There is deliberately **no search box**, unlike Products — search was not in scope for this screen,
+and an input that filters nothing would be worse than none.
+
+### Paging
+
+Identical to Products: the pager appears only when there is more than one page, Previous/Next are
+disabled at the ends and carry `pageSize` through. Invalid arguments are rejected by the service
+rather than clamped.
+
 ## Product flow
 
 ```
@@ -181,6 +218,7 @@ happened.
 | `/Products/Create` | `Create.cshtml` | Grouped sections (Identification / Pricing / Stock), two-column on `md+`. **`CompanyId` is a raw text input** marked with an amber border and an explanatory hint — a visible placeholder pending tenant context, deliberately not disguised as finished |
 | `/Products/Edit/{id}` | `Edit.cshtml` | Same shape; `Id` and `CompanyId` hidden |
 | `/Products/Details/{id}` | `Details.cshtml` | Detail card with computed GST-inclusive price, a stock card, and a "Danger zone" delete behind a confirmation modal |
+| `/Customers` | `Customers/Index.cshtml` | Read-only paged table. See the dedicated section below |
 | `/Account/Login` | `Account/Login.cshtml` | Centred auth card. See states above |
 | `/Account/AccessDenied` | `Account/AccessDenied.cshtml` | Centred state with icon and route back |
 | `/Home/Privacy` | `Privacy.cshtml` | Placeholder content, styled consistently |
@@ -205,9 +243,10 @@ exists."* above the form rather than producing a stack trace.
 
 ## Navigation
 
-The sidebar lists Dashboard and Products, with active state derived from `ViewContext.RouteData` so
-a page added later highlights without editing the partial. Customers, Quotations and Company are
-deliberately absent — no controllers exist for them, and a nav link to a 404 is worse than no link.
+The sidebar is grouped: **Overview** (Dashboard), **Inventory** (Products), **Sales** (Customers).
+Active state is derived from `ViewContext.RouteData`, so a page added later highlights without
+editing the partial. Quotations and Company are deliberately absent — no controllers exist for them,
+and a nav link to a 404 is worse than no link.
 
 The top bar holds the drawer toggle (below `lg`), the page title, the theme toggle and the user
 dropdown.
