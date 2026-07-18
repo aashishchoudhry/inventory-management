@@ -7,22 +7,32 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InventoryErp.Infrastructure.Persistence;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
+public class InventoryErpDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
 {
     private readonly ICurrentUser? _currentUser;
 
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, ICurrentUser? currentUser = null)
+    public InventoryErpDbContext(DbContextOptions<InventoryErpDbContext> options, ICurrentUser? currentUser = null)
         : base(options)
     {
         _currentUser = currentUser;
     }
 
+    public DbSet<Company> Companies => Set<Company>();
+
+    public DbSet<CompanySetting> CompanySettings => Set<CompanySetting>();
+
     public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<Customer> Customers => Set<Customer>();
+
+    public DbSet<Quotation> Quotations => Set<Quotation>();
+
+    public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-        builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+        builder.ApplyConfigurationsFromAssembly(typeof(InventoryErpDbContext).Assembly);
         ApplySoftDeleteQueryFilters(builder);
     }
 

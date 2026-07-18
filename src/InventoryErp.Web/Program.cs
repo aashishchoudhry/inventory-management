@@ -20,7 +20,7 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         options.User.RequireUniqueEmail = true;
         options.SignIn.RequireConfirmedAccount = false;
     })
-    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddEntityFrameworkStores<InventoryErpDbContext>()
     .AddDefaultTokenProviders()
     .AddDefaultUI();
 

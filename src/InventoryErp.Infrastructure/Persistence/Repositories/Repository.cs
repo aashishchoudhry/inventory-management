@@ -9,7 +9,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 {
     private readonly DbSet<T> _set;
 
-    public Repository(ApplicationDbContext context)
+    public Repository(InventoryErpDbContext context)
     {
         _set = context.Set<T>();
     }

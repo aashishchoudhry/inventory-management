@@ -46,7 +46,7 @@ point inward toward it.
 | .NET SDK | 10.0.302 | Solution scaffold, build, test |
 | Entity Framework Core | 10.0.10 | ORM, migrations (`dotnet-ef` 10.0.10) |
 | ASP.NET Core Identity | 10.0.10 | Authentication and user management |
-| SQL Server LocalDB | `(localdb)\MSSQLLocalDB` | Development database |
+| SQL Server 2022 | `.` (local default instance) | Development database |
 | xUnit | 2.9.3 | Unit testing |
 | Claude Code | Opus 4.8 | Planning, scaffolding, implementation, end-to-end verification |
 | Git | — | Version control |

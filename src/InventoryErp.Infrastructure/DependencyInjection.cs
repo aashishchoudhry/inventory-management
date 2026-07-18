@@ -16,7 +16,7 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
-        services.AddDbContext<ApplicationDbContext>(options =>
+        services.AddDbContext<InventoryErpDbContext>(options =>
             options.UseSqlServer(connectionString));
 
         // Identity itself is registered by the web composition root, because the default

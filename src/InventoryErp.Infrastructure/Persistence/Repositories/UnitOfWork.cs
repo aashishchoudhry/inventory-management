@@ -6,10 +6,10 @@ namespace InventoryErp.Infrastructure.Persistence.Repositories;
 
 public sealed class UnitOfWork : IUnitOfWork
 {
-    private readonly ApplicationDbContext _context;
+    private readonly InventoryErpDbContext _context;
     private readonly ConcurrentDictionary<Type, object> _repositories = new();
 
-    public UnitOfWork(ApplicationDbContext context)
+    public UnitOfWork(InventoryErpDbContext context)
     {
         _context = context;
     }

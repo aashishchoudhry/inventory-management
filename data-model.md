@@ -89,11 +89,29 @@ A party the company sells to, scoped to a company.
 | `Id` | `Guid` | From `BaseEntity` |
 | `CompanyId` | `Guid` | Owning tenant |
 | `Name` | `string` | Required |
-| `Code` | `string?` | Human-readable identifier, intended to be unique within the company |
-| `Mobile` | `string?` | |
-| `City` | `string?` | |
-| `State` | `string?` | |
-| `Address` | `string?` | |
+| `Code` | `string?` | Human-readable identifier, max 50. Unique within the company **when present** |
+| `Mobile` | `string?` | Max 20 |
+| `City` | `string?` | Max 100 |
+| `State` | `string?` | Max 100 |
+| `Address` | `string?` | Max 500 |
+
+### Optional-but-unique: `Customer.Code`
+
+`Code` is both optional and unique per company, which is a combination SQL Server does not handle
+the obvious way. **SQL Server treats two NULLs as equal for uniqueness purposes**, so a plain unique
+index on `(CompanyId, Code)` would permit only one customer without a code per company — the second
+code-less customer would fail with a constraint violation.
+
+The index is therefore filtered on `Code IS NOT NULL` as well as the usual soft-delete clause:
+
+```
+WHERE [IsDeleted] = 0 AND [Code] IS NOT NULL
+```
+
+This enforces uniqueness across customers that have a code, while allowing any number without one.
+This is not visible from the entity alone — `public string? Code` looks like an ordinary optional
+field. The same pattern will be needed for any future optional-but-unique field; `Product.Barcode`
+is the obvious candidate if barcodes are ever required to be unique.
 
 ## Quotation
 
@@ -103,7 +121,7 @@ A priced offer issued to a customer, scoped to a company.
 | --- | --- | --- |
 | `Id` | `Guid` | From `BaseEntity` |
 | `CompanyId` | `Guid` | Owning tenant |
-| `QuotationNumber` | `string` | Required. Human-readable reference, intended to be unique per company |
+| `QuotationNumber` | `string` | Required, max 50. Unique per company, filtered on `IsDeleted = 0` |
 | `CustomerId` | `Guid` | The customer being quoted |
 | `QuotationDate` | `DateTime` | Date of issue |
 | `ValidUntil` | `DateTime?` | Date the offer lapses. Null means it does not expire |
@@ -111,7 +129,9 @@ A priced offer issued to a customer, scoped to a company.
 | `TaxAmount` | `decimal` | |
 | `DiscountAmount` | `decimal` | |
 | `TotalAmount` | `decimal` | Final payable amount |
-| `Notes` | `string?` | |
+| `Notes` | `string?` | Max 2000 |
+
+All four money fields are `decimal(18,2)`. Indexed on `CompanyId` and `CustomerId`.
 
 ## QuotationLine
 
@@ -124,10 +144,38 @@ A single product line on a quotation.
 | `ProductId` | `Guid` | Product being quoted |
 | `Quantity` | `int` | Whole units, consistent with `Product.CurrentStock` |
 | `UnitPrice` | `decimal` | Copied from the product's selling price at quoting time |
-| `DiscountPercent` | `decimal` | Line-level discount, e.g. `5.0` for 5% |
-| `GstPercent` | `decimal` | Copied from the product at quoting time |
-| `TaxAmount` | `decimal` | |
-| `TotalAmount` | `decimal` | Line total after discount and tax |
+| `DiscountPercent` | `decimal` | `decimal(5,2)`. Line-level discount, e.g. `5.0` for 5% |
+| `GstPercent` | `decimal` | `decimal(5,2)`. Copied from the product at quoting time |
+| `TaxAmount` | `decimal` | `decimal(18,2)` |
+| `TotalAmount` | `decimal` | `decimal(18,2)`. Line total after discount and tax |
+
+Money is `decimal(18,2)`; percentages are `decimal(5,2)`. Indexed on `QuotationId` and `ProductId`.
+
+### Relationships
+
+Configured entirely via Fluent API in the entity configuration classes. The domain entities still
+hold **bare foreign-key `Guid`s and no navigation properties**, so the relationships are declared
+with the reference-less overloads (`HasOne<T>().WithMany()`).
+
+| From | To | Delete behaviour | Why |
+| --- | --- | --- | --- |
+| `QuotationLine` | `Quotation` | **Cascade** | A line has no life of its own; deleting the quotation removes its lines |
+| `QuotationLine` | `Product` | **Restrict** | A quoted product cannot be hard-deleted out from under the line |
+| `Quotation` | `Customer` | **Restrict** | Deleting a customer must never silently destroy the record of what was quoted to them |
+
+Verified against the created schema: deleting a parent quotation removed its line (1 → 0), and
+deleting a customer holding a quotation was blocked by the foreign key.
+
+#### Cascade delete does not fire on soft delete
+
+This is the important caveat. Cascade is a **database-level** `ON DELETE CASCADE`, and the
+application soft-deletes — `Repository<T>.Remove` sets `IsDeleted = true` and issues an `UPDATE`,
+never a `DELETE`. So soft-deleting a quotation leaves its lines with `IsDeleted = false`: the parent
+disappears from queries while the children remain visible and orphaned.
+
+Nothing in the codebase currently soft-deletes a quotation, so this is not yet a live bug, but any
+quotation delete feature must explicitly cascade the soft delete to its lines in the application
+layer. The database cascade only protects against a genuine hard delete.
 
 ### Why totals are stored, not computed
 

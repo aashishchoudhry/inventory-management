@@ -10,16 +10,16 @@ namespace InventoryErp.Application.Tests.Services;
 
 public class ProductServiceTests : IDisposable
 {
-    private readonly ApplicationDbContext _context;
+    private readonly InventoryErpDbContext _context;
     private readonly ProductService _service;
 
     public ProductServiceTests()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        var options = new DbContextOptionsBuilder<InventoryErpDbContext>()
             .UseInMemoryDatabase($"products-{Guid.NewGuid()}")
             .Options;
 
-        _context = new ApplicationDbContext(options);
+        _context = new InventoryErpDbContext(options);
         _service = new ProductService(new UnitOfWork(_context));
     }
 
