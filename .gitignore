@@ -480,3 +480,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# User-uploaded content — runtime data, not source
+src/InventoryErp.Web/wwwroot/uploads/*
+!src/InventoryErp.Web/wwwroot/uploads/logos/
+src/InventoryErp.Web/wwwroot/uploads/logos/*
+!src/InventoryErp.Web/wwwroot/uploads/logos/.gitkeep

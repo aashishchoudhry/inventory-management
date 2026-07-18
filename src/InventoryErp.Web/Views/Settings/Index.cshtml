@@ -1,0 +1,198 @@
+@using InventoryErp.Web.Models
+@model SettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">Settings</h2>
+        <p class="page-header__subtitle">Company details used on quotations and invoices</p>
+    </div>
+</div>
+
+@* enctype is required for the logo upload; without it the file is silently not posted. *@
+<form asp-action="Index" method="post" enctype="multipart/form-data" data-busy-submit>
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"
+         style="@(ViewData.ModelState[string.Empty]?.Errors.Count > 0 ? "" : "display:none")"></div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="card mb-3">
+                <div class="card-header">Company</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label asp-for="Name" class="form-label"></label>
+                            <input asp-for="Name" class="form-control" />
+                            <span asp-validation-for="Name" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="Tagline" class="form-label"></label>
+                            <input asp-for="Tagline" class="form-control"
+                                   placeholder="Short strapline for documents" />
+                            <span asp-validation-for="Tagline" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Mobile" class="form-label"></label>
+                            <input asp-for="Mobile" class="form-control" />
+                            <span asp-validation-for="Mobile" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Email" class="form-label"></label>
+                            <input asp-for="Email" class="form-control" />
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Website" class="form-label"></label>
+                            <input asp-for="Website" class="form-control" />
+                            <span asp-validation-for="Website" class="text-danger small"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Registered address</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label asp-for="AddressLine" class="form-label"></label>
+                            <input asp-for="AddressLine" class="form-control"
+                                   placeholder="Street, area, landmark" />
+                            <span asp-validation-for="AddressLine" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="City" class="form-label"></label>
+                            <input asp-for="City" class="form-control" />
+                            <span asp-validation-for="City" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="State" class="form-label"></label>
+                            <input asp-for="State" class="form-control" />
+                            <span asp-validation-for="State" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="Country" class="form-label"></label>
+                            <input asp-for="Country" class="form-control" />
+                            <span asp-validation-for="Country" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="PinCode" class="form-label"></label>
+                            <input asp-for="PinCode" class="form-control" />
+                            <span asp-validation-for="PinCode" class="text-danger small"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Tax identifiers</div>
+                <div class="card-body">
+                    <p class="form-section__hint">
+                        Printed on statutory documents. Leave blank if not registered.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label asp-for="Gstin" class="form-label"></label>
+                            <input asp-for="Gstin" class="form-control text-uppercase"
+                                   maxlength="15" placeholder="27AABCU9603R1ZM" />
+                            <p class="form-hint">15 characters.</p>
+                            <span asp-validation-for="Gstin" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label asp-for="Pan" class="form-label"></label>
+                            <input asp-for="Pan" class="form-control text-uppercase"
+                                   maxlength="10" placeholder="AABCU9603R" />
+                            <p class="form-hint">10 characters.</p>
+                            <span asp-validation-for="Pan" class="text-danger small"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Document text</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="InvoiceTerms" class="form-label"></label>
+                        <textarea asp-for="InvoiceTerms" class="form-control" rows="3"></textarea>
+                        <p class="form-hint">Terms and conditions printed on quotations and invoices.</p>
+                        <span asp-validation-for="InvoiceTerms" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-0">
+                        <label asp-for="InvoiceFooter" class="form-label"></label>
+                        <input asp-for="InvoiceFooter" class="form-control" />
+                        <p class="form-hint">Single line at the bottom of each document.</p>
+                        <span asp-validation-for="InvoiceFooter" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="card mb-3">
+                <div class="card-header">Logo</div>
+                <div class="card-body">
+                    @* The stored path round-trips so saving without choosing a new file keeps
+                       the current logo. *@
+                    <input type="hidden" asp-for="LogoPath" />
+
+                    @if (!string.IsNullOrWhiteSpace(Model.LogoPath))
+                    {
+                        <div class="mb-3 p-3 rounded border text-center"
+                             style="background: var(--app-surface-alt);">
+                            <img src="@Model.LogoPath" alt="Current company logo"
+                                 style="max-height: 80px; max-width: 100%;" />
+                        </div>
+                        <div class="form-check mb-3">
+                            <input asp-for="RemoveLogo" class="form-check-input" />
+                            <label asp-for="RemoveLogo" class="form-check-label"></label>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="form-hint">No logo uploaded yet.</p>
+                    }
+
+                    <label asp-for="LogoFile" class="form-label"></label>
+                    <input asp-for="LogoFile" type="file" class="form-control"
+                           accept="image/png,image/jpeg" />
+                    <p class="form-hint mb-0">PNG or JPG, up to 2 MB.</p>
+                    <span asp-validation-for="LogoFile" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Branding</div>
+                <div class="card-body">
+                    <label asp-for="PrimaryAccentColor" class="form-label"></label>
+                    <div class="d-flex gap-2 align-items-center">
+                        @* The colour input and the text box are bound to each other in
+                           site.js — the text box is what actually posts. *@
+                        <input type="color" class="form-control form-control-color"
+                               value="@Model.PrimaryAccentColor" data-color-picker
+                               aria-label="Pick accent colour" />
+                        <input asp-for="PrimaryAccentColor" class="form-control text-uppercase"
+                               data-color-text maxlength="7" />
+                    </div>
+                    <p class="form-hint">Used for headings and accents on generated PDFs.</p>
+                    <span asp-validation-for="PrimaryAccentColor" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body action-bar">
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
+                        Save settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

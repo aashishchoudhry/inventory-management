@@ -1016,3 +1016,350 @@ it would have shipped unnoticed without posting the empty case directly.
 - No edit, delete or duplicate action.
 - The number-allocation race from the previous step is unchanged.
 - Creating a quotation still does not affect stock.
+
+---
+
+## 2026-07-18 — Settings (storage and editing)
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now start the Settings feature — this step is just storing and editing settings, PDF generation
+> comes next.
+>
+> In InventoryErp.Application, add ISettingsService/SettingsService backed by CompanySetting
+> (key/value), returning ServiceResult<T>. Implement:
+> - GetSettings(companyId) — returns a strongly-typed CompanySettingsDto (address fields, GSTIN, PAN,
+>   invoice terms, invoice footer, primary accent color), reading from the key/value rows and falling
+>   back to sensible defaults if a key is missing
+> - UpdateSettings(companyId, dto) — upserts the key/value rows
+>
+> In InventoryErp.Web, add SettingsController + a Razor edit form for these fields, pre-filled from
+> GetSettings.
+>
+> Then update api-contract.md, design-notes.md's Backend Design section, ai-prompts/implementation.md.
+> Test manually: change a setting, reload the page, confirm it persisted. Don't touch PDF generation yet.
+
+### What Claude Code did
+
+- Extended `SettingKeys` (Shared) with the new keys: city, state, country, PIN, GSTIN, PAN, invoice
+  terms, invoice footer, accent colour.
+- `CompanySettingsDto`, `ISettingsService`, `SettingsService` in Application, depending only on
+  `IUnitOfWork`.
+- **Three-step fallback** per field: stored row → `Company` column → hard default. A blank stored
+  value is treated as absent and falls through.
+- **Upsert** that skips unchanged values, so audit columns record only real edits.
+- `SettingsController` + a Razor form grouped into Registered address / Tax identifiers / Document
+  text / Branding, with a colour swatch bound to the hex text input.
+- POST-redirect-GET, so a refresh cannot resubmit and the page re-reads from the database — which is
+  what actually proves persistence.
+- 18 new tests, taking the suite from 85 to **106**.
+
+### The duplication this surfaced
+
+`Address`, `City`, `State`, `Country`, `PinCode`, `GstNumber` and `PanNumber` already exist as typed
+columns on `Company`. The prompt asked for the same fields as key/value settings. This is the exact
+collision flagged when `Company` was first added — *"company branding now has two possible homes…
+settle it before the PDF work, or they will drift."*
+
+Resolved with a documented precedence rather than a merge: **setting wins, column is the fallback.**
+An unconfigured company shows its real details on first visit; once saved, settings are
+authoritative. Writes do **not** update the `Company` columns, so the two can diverge — recorded in
+`design-notes.md` as needing a decision before anything else reads those columns.
+
+### A real bug found by testing
+
+`UpdateSettingsAsync` threw *"another instance with the same key value is already being tracked"* on
+a **second** save within one scope. `ListPagedAsync` reads with `AsNoTracking`, so callers hold
+detached copies; `DbSet.Update` then conflicts with an already-tracked instance.
+
+Fixed in `Repository<T>` rather than in the service: `Update` and `Remove` now copy values onto the
+tracked instance when one exists. This is a **general** defect that would have affected any service
+saving the same entity twice in one request — the settings tests simply exposed it first.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| First load, no rows | Form pre-filled from `Company` columns; `CompanySettings` table empty |
+| Change City → Pune, PIN → 411001, terms, footer, colour → `#0F766E` | Saved, "Settings saved." flash |
+| **Fresh page load** | All five values persisted |
+| Stored rows | 10 rows, one per key, values exactly as entered |
+| Second save (City → Nashik) | Still 10 rows — updated, not duplicated |
+| Audit | `ModifiedBy` = `admin@inventoryerp.local` |
+| Server validation | `Gstin=TOOSHORT` → "GSTIN must be exactly 15 characters."; bad colour → "Use a hex colour such as #4F46E5." |
+| Colour swatch | Typing hex syncs the swatch, and vice versa |
+| Console errors | None |
+| Build / tests | Clean, 0 warnings; **106/106 passing** |
+
+### Accepted
+
+- **Column fallback, not just hard defaults.** The prompt asked for "sensible defaults"; falling back
+  to the company's real registered address is more sensible than a placeholder.
+- **Blank treated as absent.** An accidentally cleared row falls through to the fallback rather than
+  blanking a printed document.
+- **Blank GSTIN/PAN allowed.** A company may not be GST-registered; requiring them would be wrong.
+- **POST-redirect-GET**, which makes the manual persistence test meaningful — the reloaded page is
+  reading from the database, not echoing the submitted form.
+
+### Changed beyond the request
+
+- **Fixed `Repository<T>.Update`** for the tracking conflict above — a general fix, not settings-specific.
+- **Validation not asked for:** GSTIN/PAN length, hex colour format, field length caps. These values
+  are printed on statutory documents, so a malformed GSTIN is worth catching at entry.
+- **Sidebar link and an `i-settings` icon**, otherwise the page is reachable only by URL.
+- **Client rules matched to the server.** `[StringLength(15, MinimumLength = 15)]` would have
+  rejected a blank GSTIN that the service permits; replaced with a regex allowing blank-or-exact.
+
+### Rejected
+
+- No PDF generation — explicitly next step.
+- Did not write settings back to the `Company` columns. That is a real decision about which store
+  owns the data, and making it silently as a side effect of this step would be the wrong way to
+  settle it.
+- Did not add a settings cache. Reads are per request and cheap; caching would add invalidation
+  complexity for no measured benefit.
+
+### Open items after this step
+
+- **`Company` columns vs settings can diverge** after the first save. Needs a decision before
+  anything reads `Company.Address` for documents.
+- `Company.Name`, `Tagline`, `Mobile`, `Email`, `Website` and `LogoPath` are not editable anywhere —
+  they were not in the requested field list, but a PDF header will want them.
+- No logo upload.
+- Settings are read fresh on every request; no caching.
+
+---
+
+## 2026-07-18 — Settings: company fields and logo upload
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Before moving to the next feature, I found a gap: the Settings form is missing Company's own
+> fields (name, tagline, mobile, email, website, logoPath) — only address/GSTIN/PAN/terms/footer/color
+> are editable, but the PDF needs company name and a logo in the header.
+>
+> Extend SettingsController/the Settings view to also edit: name, tagline, mobile, email, website.
+> Add these to CompanySettingsDto and the GetSettings/UpdateSettings service methods.
+>
+> For logoPath specifically: add a simple file upload (image file, reasonable size limit e.g. 2MB,
+> accept png/jpg), save it to wwwroot/uploads/logos/ with a generated filename, and store the
+> relative path in Company.logoPath. Update the PDF header to render this logo if present, skip it
+> gracefully if not.
+>
+> Then update data-model.md, ui-flow.md, ai-prompts/implementation.md.
+> Test manually: upload a logo, generate a PDF, confirm it appears in the header
+
+### Blocker raised before starting
+
+**There is no PDF generation.** `IPdfGenerator` is an unimplemented placeholder from the original
+scaffold — no library chosen, no implementation, no registration, nothing calling it. The previous
+prompt said "PDF generation comes next" and it was not built. So "update the PDF header" had no
+header to update, and the stated manual test could not run.
+
+Raised before writing any code. Decision: build settings and logo now, PDF next step, so the
+library choice is made deliberately rather than smuggled into this change.
+
+Also raised: the `Company` columns vs settings-rows duplication flagged two steps earlier. Decision:
+**write both stores**, reads still prefer the setting.
+
+### What Claude Code did
+
+- Extended `CompanySettingsDto` with `Name`, `Tagline`, `Mobile`, `Email`, `Website`, `LogoPath`,
+  and added the matching `SettingKeys`.
+- **`UpdateSettingsAsync` now mirrors onto the `Company` columns**, resolving the drift. Blank
+  optional values are written as null, matching how the columns are modelled; a blank `Name` never
+  nulls the required column.
+- `ILogoStorage` in Application with a `LogoUpload` record — the Application layer sees no
+  `IFormFile`, no `IWebHostEnvironment` and no `System.IO` paths.
+- `LogoStorage` in Web (that is where `wwwroot` is), validating size, extension **and magic bytes**,
+  writing a GUID-named file, and deleting the previous one.
+- Settings view: a Company card and a Logo card with preview, remove checkbox and file input;
+  `enctype="multipart/form-data"` on the form.
+- **Gitignored `wwwroot/uploads/`** with a tracked `.gitkeep`, so user uploads never enter source
+  control but the directory survives a clone.
+- 9 new tests, taking the suite from 106 to **115**.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| New fields pre-filled | Name, tagline, mobile, email, website shown from seeded company |
+| Logo upload | Saved as `/uploads/logos/{guid}.png`; file on disk |
+| Stored in **both** stores | `CompanySettings` row **and** `Company.LogoPath` — mirroring confirmed |
+| Renders after reload | `naturalWidth` 160, `naturalHeight` 60 — genuinely decoded, not just a 200 |
+| Served correctly | `200 image/png` |
+| Replacing a logo | Old file deleted; exactly one file remains |
+| `.pdf` extension | Rejected: "The logo must be a PNG or JPG image." |
+| **Text file renamed `.png`** | Rejected: "That file is not a valid PNG or JPG image." |
+| 3 MB file | Rejected: "The logo must be 2 MB or smaller." |
+| After a rejected upload | Existing logo and stored path unchanged |
+| Build / tests | Clean, 0 warnings; **115/115 passing** |
+
+### Accepted
+
+- **Magic-byte checking, not just extension.** Extension and `Content-Type` are both client-supplied.
+  A renamed text file passes both and was rejected only by the signature check.
+- **GUID filenames.** A client filename could contain traversal segments or overwrite an existing file.
+- **Delete the old file only after the save succeeds**, so a failed save never leaves a dangling
+  reference.
+- **`ILogoStorage` as an abstraction** rather than file I/O in the controller — keeps Application
+  free of web types and makes a later move to blob storage an implementation change.
+
+### Changed beyond the request
+
+- **Mirrored writes onto the `Company` columns**, per the decision above. This closes a drift I had
+  flagged and could not close unilaterally.
+- **Gitignored the uploads directory.** Not mentioned, but without it every uploaded logo would be
+  committed as source.
+- **Validation for the new fields:** name required, length caps, and a shape-only email check
+  (deliberately not RFC-strict, which rejects addresses that work).
+- **A "remove logo" checkbox**, since otherwise an uploaded logo could never be cleared.
+
+### Rejected
+
+- **No PDF work**, per the decision above. The manual test's PDF step is deferred, not skipped.
+- Did not store the image in the database. A path keeps backups small and lets the web server serve
+  the file directly — documented with its trade-off in `data-model.md`.
+- Did not add image resizing or dimension limits. A 2 MB cap is enough for now; resizing needs an
+  imaging library, which is a dependency decision of its own.
+
+### Open items after this step
+
+- **PDF generation still does not exist** — the logo has no consumer yet.
+- Database and filesystem can disagree: a restored backup without `wwwroot/uploads` leaves
+  `LogoPath` dangling. The UI degrades to a broken image rather than failing.
+- No image dimension or aspect-ratio guidance; a very wide logo may not suit a document header.
+- Orphaned files are only cleaned on replacement — a logo removed via the checkbox deletes its file,
+  but a row deleted directly in SQL would leave the file behind.
+
+---
+
+## 2026-07-18 — Quotation PDF generation, with logo resilience
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Two follow-ups from the logo upload work before we move to global search:
+>
+> 1. Update QuotationPdfService to handle a missing logo file gracefully — if Company.LogoPath is set
+>    but the file doesn't exist on disk (e.g. after a restored backup), skip the logo in the PDF
+>    header instead of throwing. Don't error the whole PDF generation over a missing image.
+> 2. Decide on and apply a max-dimension constraint for the logo in the PDF header — your call on the
+>    exact values, tell me what you chose and why.
+>
+> Then update data-model.md's note on LogoPath to also mention the PDF generator's missing-file
+> behavior, and update ai-prompts/implementation.md.
+>
+> Test manually: generate a PDF with a valid logo, then manually delete the file from
+> wwwroot/uploads/logos/ and generate again — confirm it degrades cleanly instead of erroring.
+
+### Blocker raised before starting
+
+**`QuotationPdfService` did not exist, and neither did any PDF generation.** The only PDF artefact
+was `IPdfGenerator.cs`, an unimplemented placeholder from the original scaffold — no library, no
+implementation, no registration, nothing referencing it. This was the third time PDF had come up;
+the previous step had explicitly deferred it.
+
+All three parts were therefore unactionable as written: no service to update, no header to
+constrain, no PDF to generate for the test. Raised before writing code. Decision: build the PDF now
+with both behaviours designed in, using **QuestPDF**.
+
+### Licence check
+
+Flagged before installing: QuestPDF's Community licence is free only for organisations under a
+revenue threshold; above it, a paid licence is required. This is the same trap as FluentAssertions
+earlier in the project. Accepted knowingly; the declaration is explicit in `AddInfrastructure`, so
+the choice is visible rather than buried.
+
+### What Claude Code did
+
+- Installed **QuestPDF 2026.7.1** into Infrastructure.
+- `IQuotationPdfService` + `GeneratedDocument` in Application; `QuotationPdfService` in
+  Infrastructure — so the rendering library never reaches the Application layer.
+- Extended `ILogoStorage` with `TryReadAsync`, returning **null** for a blank path, a path outside
+  the logos directory, a missing file, or an IO/permission failure.
+- Full A4 document: header with logo and company block, quotation meta, line table, totals, notes,
+  terms, and a footer with page numbers. Accent colour comes from settings, falling back to the
+  default on a malformed value.
+- `Quotations/Pdf/{id}` action plus buttons on the list and detail views.
+- 6 new tests, taking the suite from 115 to **121**.
+
+### Decision: max logo dimensions — **180 × 60 pt**
+
+About 63 × 21 mm, at 72 pt per inch.
+
+- A4 portrait with 40 pt margins leaves roughly **515 pt** of content width. 180 pt is about a
+  third of that, leaving room for the company name, address and tax IDs beside it.
+- 60 pt of height keeps the header shorter than the first rows of the line table, so the document
+  still opens on the quotation rather than on branding.
+- The image is scaled to **fit inside** the box preserving aspect ratio, and never enlarged beyond
+  natural size. A 2000 px wide banner, a square mark and a tall crest all fit without distortion
+  or pushing the layout apart.
+
+Constrained at **render** time rather than upload, so the original file stays intact and a future
+document layout can pick its own box.
+
+### A real gap found by testing
+
+The test `An_unreadable_logo_does_not_fail_the_document` failed initially. `LogoStorage.TryReadAsync`
+catches IO and permission errors, but `QuotationPdfService` was **trusting** that contract — a
+storage implementation that threw anything else would have failed the whole document, which is
+exactly what the prompt asked to prevent. Added a catch in the PDF service too: a decorative image
+must never be able to fail a commercial document.
+
+### Verification — the requested manual test
+
+| Step | Result |
+| --- | --- |
+| PDF with a valid logo | `200`, `application/pdf`, 54,100 bytes, `%PDF-1.4`, filename `QT-2026-0001.pdf` |
+| Embedded images | **1** (`/Subtype /Image`) |
+| **Deleted the file from `wwwroot/uploads/logos/`**, DB path left dangling | — |
+| Regenerated | `200`, valid PDF, 51,771 bytes |
+| Embedded images | **0** — the logo was genuinely omitted, not blank-rendered |
+| Server errors | **None**; warnings logged by both `LogoStorage` and `QuotationPdfService` |
+| Restored the file, regenerated | Back to 54,100 bytes, 1 image — byte-identical to the original |
+| Build / tests | Clean, 0 warnings; **121/121 passing** |
+
+**Limitation, stated plainly:** the PDF could not be *visually* rendered for inspection — `pdftoppm`
+is not installed and the preview browser's PDF plugin renders blank in this environment. Verification
+was structural (valid header, byte size, embedded image count, no exceptions) rather than visual.
+The layout should be eyeballed by a human before this is considered done.
+
+### Accepted
+
+- **Degrade, never fail.** A quotation that cannot be sent because a logo moved is far worse than
+  one sent without a logo.
+- **Warnings at both layers**, so a dangling path is discoverable in logs rather than silent.
+- **Image-object count as the assertion**, rather than only the status code — it proves the image
+  was actually omitted rather than rendered blank or as a broken placeholder.
+- **Accent colour falls back** on a malformed stored value instead of throwing mid-render.
+
+### Changed beyond the request
+
+- **Built the entire PDF feature**, since the two follow-ups presupposed it.
+- **Added `ILogoStorage.TryReadAsync`** — Infrastructure cannot reach `wwwroot` directly, and this
+  keeps the missing-file policy in one place.
+- **Defensive catch in the PDF service**, per the gap above.
+- **PDF buttons on the list and detail views**, otherwise the endpoint is URL-only.
+
+### Rejected
+
+- Did not enforce dimensions at upload. Capping at render keeps the original intact and lets each
+  document choose its own box.
+- Did not add image resizing or re-encoding; that needs an imaging dependency and QuestPDF already
+  scales cleanly.
+- Did not implement the old `IPdfGenerator` placeholder interface — its `RenderAsync(string
+  templateName, object model)` signature is stringly-typed and untyped. `IQuotationPdfService` is
+  specific and type-safe. **`IPdfGenerator` is now dead code and should be deleted.**
+
+### Open items after this step
+
+- **`IPdfGenerator` is unused** and should be removed.
+- The PDF layout has not been visually reviewed — see the limitation above.
+- No PDF for anything other than quotations.
+- Rendering is synchronous and in-process; a large batch would tie up request threads.

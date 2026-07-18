@@ -44,9 +44,13 @@
             <svg class="icon" aria-hidden="true"><use href="#i-file" /></svg>
             <span>Quotations</span>
         </a>
-    </nav>
 
-    @* Company settings is intentionally absent: no controller exists for it yet, and a nav
-       link to a 404 is worse than no link. *@
+        <p class="app-sidebar__heading">Configuration</p>
+        <a class="@NavClass("Settings")" aria-current="@NavCurrent("Settings")"
+           asp-controller="Settings" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-settings" /></svg>
+            <span>Settings</span>
+        </a>
+    </nav>
     <div class="app-sidebar__footer">Core scope</div>
 </aside>

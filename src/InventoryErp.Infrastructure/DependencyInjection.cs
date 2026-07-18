@@ -1,4 +1,6 @@
+using InventoryErp.Application.Interfaces;
 using InventoryErp.Domain.Interfaces;
+using InventoryErp.Infrastructure.Documents;
 using InventoryErp.Infrastructure.Persistence;
 using InventoryErp.Infrastructure.Persistence.Repositories;
 using InventoryErp.Infrastructure.Persistence.Seeding;
@@ -26,6 +28,11 @@ public static class DependencyInjection
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<DatabaseSeeder>();
+        services.AddScoped<IQuotationPdfService, QuotationPdfService>();
+
+        // QuestPDF requires an explicit licence declaration at startup. Community is free for
+        // organisations under the revenue threshold — see design-notes.md.
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
         return services;
     }

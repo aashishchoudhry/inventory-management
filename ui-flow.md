@@ -259,6 +259,54 @@ Line table (product with SKU, qty, unit price, discount %, GST %, tax, total), a
 
 No PDF action yet — that is the next step.
 
+## Settings screen
+
+`/Settings` — `SettingsController.Index` (GET and POST), one form covering everything.
+
+Grouped into cards: **Company** (name, tagline, mobile, email, website), **Registered address**,
+**Tax identifiers** (GSTIN, PAN), **Document text** (invoice terms, footer), **Logo**, and
+**Branding** (accent colour).
+
+Uses **POST-redirect-GET**: after a successful save the browser is redirected back to a fresh GET,
+so a refresh cannot resubmit and the page genuinely re-reads from the database rather than echoing
+what was posted.
+
+### Logo upload control
+
+A file input accepting `image/png,image/jpeg`, capped at **2 MB**, in its own card.
+
+| Element | Behaviour |
+| --- | --- |
+| Preview | When a logo exists, it renders in a bordered panel above the input |
+| **Remove current logo** checkbox | Only shown when a logo exists. Clears it on save |
+| File input | Choosing a file replaces the current logo on save |
+| Hidden `LogoPath` | Round-trips the stored path, so saving without choosing a file keeps the existing logo |
+
+The form carries **`enctype="multipart/form-data"`** — without it the file is silently not posted.
+
+**Validation is server-side and layered.** The `accept` attribute and the size hint are
+conveniences; the server independently checks extension, size, **and the file's magic bytes**. A
+text file renamed to `.png` with `Content-Type: image/png` is rejected — the extension and content
+type are both client-supplied and trivially forged.
+
+Files are stored under `wwwroot/uploads/logos/` with a **generated GUID filename**; the uploaded
+name is never used. Replacing a logo deletes the previous file, but only *after* the save succeeds,
+so a failed save never leaves the company with a missing image.
+
+### States
+
+| State | Appearance |
+| --- | --- |
+| **Initial** | Fields pre-filled from settings, falling back to the `Company` columns; "No logo uploaded yet." when none |
+| **Loading** | None — server-rendered. Submit shows a spinner |
+| **Success** | Redirect, then a green "Settings saved." flash |
+| **Validation error** | Form re-renders with entered values intact; messages beside the offending field |
+| **Rejected upload** | Message under the file input; **nothing is saved**, and the existing logo and unsaved edits are both preserved |
+| **No company configured** | Error banner instead of the form |
+
+Verified rejection messages: *"The logo must be a PNG or JPG image."*, *"That file is not a valid
+PNG or JPG image."*, *"The logo must be 2 MB or smaller."*
+
 ## Product flow
 
 ```
@@ -295,6 +343,7 @@ No PDF action yet — that is the next step.
 | `/Quotations/Details/{id}` | `Quotations/Details.cshtml` | Full quotation with lines and totals |
 | `/Account/Login` | `Account/Login.cshtml` | Centred auth card. See states above |
 | `/Account/AccessDenied` | `Account/AccessDenied.cshtml` | Centred state with icon and route back |
+| `/Settings` | `Settings/Index.cshtml` | Company settings form, including logo upload. See below |
 | `/Home/Privacy` | `Privacy.cshtml` | Placeholder content, styled consistently |
 | Error | `Shared/Error.cshtml` | Uses `_AuthLayout`, since an error can be reached signed out |
 

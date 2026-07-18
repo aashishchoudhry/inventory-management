@@ -17,17 +17,20 @@ public class QuotationsController : Controller
     private const int OptionPageSize = 200;
 
     private readonly IQuotationService _quotationService;
+    private readonly IQuotationPdfService _pdfService;
     private readonly ICustomerService _customerService;
     private readonly IProductService _productService;
     private readonly ICurrentCompanyProvider _currentCompany;
 
     public QuotationsController(
         IQuotationService quotationService,
+        IQuotationPdfService pdfService,
         ICustomerService customerService,
         IProductService productService,
         ICurrentCompanyProvider currentCompany)
     {
         _quotationService = quotationService;
+        _pdfService = pdfService;
         _customerService = customerService;
         _productService = productService;
         _currentCompany = currentCompany;
@@ -69,6 +72,32 @@ public class QuotationsController : Controller
         var result = await _quotationService.GetByIdAsync(id, companyId.Value, cancellationToken);
 
         return result.IsSuccess ? View(result.Data) : Failed(result);
+    }
+
+    // --------------------------------------------------------------------- pdf
+
+    /// <summary>Streams the quotation as a PDF. A missing logo does not fail the download.</summary>
+    public async Task<IActionResult> Pdf(Guid id, CancellationToken cancellationToken)
+    {
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            return NotFound();
+        }
+
+        var result = await _pdfService.GenerateAsync(id, companyId.Value, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return Failed(result);
+        }
+
+        var document = result.Data!;
+
+        // Inline so the browser's PDF viewer opens it; the filename still applies on save.
+        Response.Headers.ContentDisposition = $"inline; filename=\"{document.FileName}\"";
+        return File(document.Content, document.ContentType);
     }
 
     // ------------------------------------------------------------------ create

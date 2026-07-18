@@ -17,6 +17,10 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+// Implemented here rather than in Infrastructure because it writes into wwwroot, which only
+// the web project knows about.
+builder.Services.AddScoped<ILogoStorage, LogoStorage>();
+
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
     {
         options.Password.RequiredLength = 8;

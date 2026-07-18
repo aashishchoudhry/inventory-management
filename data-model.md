@@ -39,7 +39,51 @@ identifiers on invoices and generated PDFs.
 | `Mobile` | `string?` | |
 | `Email` | `string?` | |
 | `Website` | `string?` | |
-| `LogoPath` | `string?` | Path to the logo used on generated documents |
+| `LogoPath` | `string?` | **Root-relative web path** to the logo file, e.g. `/uploads/logos/{guid}.png` |
+
+### `LogoPath` is a path, not binary data
+
+The column stores a **relative file path**; the image itself lives on disk under
+`wwwroot/uploads/logos/`. No image bytes are ever stored in the database.
+
+Why a path rather than a `varbinary` column:
+
+- The web server serves the file directly as a static asset, with normal caching and range
+  support. A database blob would have to be read, buffered and streamed through the application
+  on every request.
+- Backups and query plans stay small. Images are typically far larger than every other row in
+  the table combined.
+- Moving to blob storage or a CDN later changes the stored string and the `ILogoStorage`
+  implementation, nothing else.
+
+The trade-off is that **the database and the filesystem can disagree**. A restored database
+backup without the matching `wwwroot/uploads` directory leaves `LogoPath` pointing at a file that
+does not exist. Backups must include both to be complete.
+
+#### How consumers handle a dangling path
+
+A missing file is treated as "no logo" everywhere, never as an error:
+
+| Consumer | Behaviour when the file is gone |
+| --- | --- |
+| `ILogoStorage.TryReadAsync` | Returns `null` and logs a warning. Also returns null for a blank path, or one pointing outside the logos directory |
+| **`QuotationPdfService`** | **Renders the header without the logo.** The PDF still generates, still returns `200`, and is simply smaller. It additionally catches any exception from logo loading, so even a storage implementation that throws cannot fail the document |
+| Settings page | Renders a broken image placeholder — visible enough that someone notices and re-uploads |
+
+This is deliberate: a quotation is a commercial document, and being unable to send one because a
+decorative image moved would be far worse than sending it without the image. Verified by deleting
+the file from disk and regenerating — the PDF went from one embedded image to zero, stayed valid,
+and logged a warning at both layers.
+
+Filenames are **generated GUIDs**, never the uploaded name: a client-supplied filename could
+contain path-traversal segments or collide with an existing file.
+
+#### Size in documents
+
+No dimension constraint is enforced at upload — only a 2 MB file-size cap. The PDF header instead
+scales the image to fit a **180 × 60 pt** box (about 63 × 21 mm), preserving aspect ratio and never
+enlarging beyond natural size. Constraining at render time rather than upload means the original is
+kept intact and a different document layout can choose its own box.
 
 ## CompanySetting
 

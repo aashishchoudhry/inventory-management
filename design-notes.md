@@ -50,6 +50,71 @@ Registration is configured with `RequireConfirmedAccount = false`, so no email c
 no mail transport dependency. That is a development convenience and should be revisited before any
 real deployment. Password policy is left at Identity defaults apart from a raised minimum length of 8.
 
+### PDF generation with QuestPDF
+
+Quotation PDFs are rendered by **QuestPDF** in `InventoryErp.Infrastructure/Documents`. The
+Application layer sees only `IQuotationPdfService`, so the rendering library never leaks upward.
+
+**Why QuestPDF:** a fluent C# layout API with no HTML engine or Chromium process to install, no
+external binaries, and precise control over a document that must look the same every time. The
+HTML-to-PDF alternatives need a browser runtime — a large deployment dependency for a page of
+tables.
+
+> **Licence.** QuestPDF's Community licence is free only for organisations below a revenue
+> threshold; above it a paid licence is required. This is the same class of trap as FluentAssertions
+> (rejected earlier for exactly this reason), so it is called out here rather than buried: the
+> licence type is declared explicitly in `AddInfrastructure`, and this decision needs revisiting if
+> the business crosses that threshold.
+
+**Rendering degrades rather than fails.** A missing or unreadable logo produces a header without a
+logo, never an exception — a commercial document must still be sendable when a decorative asset has
+moved. The logo is scaled to fit a 180 × 60 pt box, preserving aspect ratio. See `data-model.md`.
+
+The older `IPdfGenerator` placeholder from the initial scaffold was **not** implemented: its
+`RenderAsync(string templateName, object model)` signature is stringly-typed and untyped, where
+`IQuotationPdfService` is specific and compile-time safe. That interface is now dead code.
+
+### Settings are key/value rows, not fixed columns
+
+Company settings live in `CompanySetting` — a `(CompanyId, Key, Value)` table — rather than as
+columns on `Company`. `SettingsService` presents them as a strongly-typed `CompanySettingsDto`, so
+callers get compile-time safety while storage stays schema-free.
+
+**Why:** adding a setting is an `INSERT`, not a migration. Settings accumulate constantly in an ERP
+— invoice terms, a footer line, a brand colour, later a low-stock threshold, an SKU prefix, a
+document number format. Each one as a column means a migration, a deployment, and a schema change
+for what is really just configuration. Key/value also lets a setting exist for one company and not
+another without a nullable column for every optional feature.
+
+**What it costs, honestly:**
+
+- **No type safety at the storage layer.** Every value is a string; parsing lives in the service.
+  `CompanySettingsDto` restores type safety at the boundary, but the database cannot enforce it.
+- **No database constraints.** A column could be `CHECK`-constrained or `NOT NULL`; a key/value row
+  cannot. All validation is application-side, which means a direct SQL write bypasses it.
+- **No referential integrity or indexing on values.** Querying "all companies with a given setting"
+  means a string comparison, not an indexed column lookup.
+- **Keys are stringly-typed.** `SettingKeys` centralises them as constants, but a typo in a literal
+  compiles fine and silently reads as "missing". Renaming a key orphans existing rows.
+
+The trade is deliberate: settings are read rarely, written rarely, and never joined on. Nothing
+here is worth a migration each time.
+
+### The overlap with `Company` columns
+
+`Address`, `City`, `State`, `Country`, `PinCode`, `GstNumber` and `PanNumber` exist **both** as
+typed columns on `Company` and as settings keys. This is a genuine duplication, flagged when
+`Company` was first added.
+
+The resolution is a documented precedence rather than a merge: **the setting wins; the column is
+the fallback.** An unconfigured company shows its real registered details on first visit, and once
+someone saves the settings form, the settings table is authoritative.
+
+The unresolved part: saving settings does **not** write back to the `Company` columns, so after the
+first save the two can disagree. Nothing currently reads those columns for documents, so it is not
+yet a live bug — but it must be settled before anything else consumes `Company.Address`. The two
+sane endings are to drop the duplicated columns, or to have `SettingsService` write both.
+
 ### Identity user keyed on `Guid`
 
 `ApplicationUser` derives from `IdentityUser<Guid>` rather than the default `IdentityUser`, which is

@@ -252,6 +252,85 @@ returned so a caller can render a line breakdown without recomputing it.
 
 ---
 
+## `ISettingsService`
+
+`InventoryErp.Application/Interfaces/ISettingsService.cs`, implemented by
+`InventoryErp.Application/Services/SettingsService.cs`. Presents the `CompanySetting` key/value
+rows as a strongly-typed object.
+
+### `GetSettingsAsync`
+
+```csharp
+Task<ServiceResult<CompanySettingsDto>> GetSettingsAsync(
+    Guid companyId,
+    CancellationToken cancellationToken = default);
+```
+
+| Input | Rules |
+| --- | --- |
+| `companyId` | Required. `Guid.Empty` → `ValidationFailed`; unknown → `NotFound` |
+
+**Returns** `Success` with a `CompanySettingsDto`. Every property is non-null — a missing key never
+surfaces as null or an exception.
+
+#### Default-fallback behaviour
+
+Each field resolves in three steps, taking the first that yields a non-blank value:
+
+1. The stored `CompanySetting` row for that key
+2. The matching typed column on the `Company` entity, where one exists
+3. A hard-coded default
+
+| Field | Key | Column fallback | Hard default |
+| --- | --- | --- | --- |
+| `AddressLine` | `Company.AddressLine` | `Company.Address` | *(empty)* |
+| `City` | `Company.City` | `Company.City` | *(empty)* |
+| `State` | `Company.State` | `Company.State` | *(empty)* |
+| `Country` | `Company.Country` | `Company.Country` | `India` |
+| `PinCode` | `Company.PinCode` | `Company.PinCode` | *(empty)* |
+| `Gstin` | `Company.Gstin` | `Company.GstNumber` | *(empty)* |
+| `Pan` | `Company.Pan` | `Company.PanNumber` | *(empty)* |
+| `InvoiceTerms` | `Documents.InvoiceTerms` | — | "Goods once sold will not be taken back…" |
+| `InvoiceFooter` | `Documents.InvoiceFooter` | — | "This is a computer-generated document." |
+| `PrimaryAccentColor` | `Branding.PrimaryAccentColor` | — | `#4F46E5` |
+
+A stored row whose value is blank or whitespace is treated as **absent** and falls through, so an
+accidentally cleared row does not blank out a document.
+
+The column fallback exists so an unconfigured company shows its real registered details on first
+visit rather than an empty form.
+
+### `UpdateSettingsAsync`
+
+```csharp
+Task<ServiceResult<CompanySettingsDto>> UpdateSettingsAsync(
+    Guid companyId,
+    CompanySettingsDto settings,
+    CancellationToken cancellationToken = default);
+```
+
+Upserts one row per field — existing keys updated, missing keys inserted — then re-reads and
+returns the resolved settings. A field whose value is unchanged is skipped, so the audit columns
+record only real edits.
+
+| Rule | Failure |
+| --- | --- |
+| GSTIN blank or exactly 15 characters | `ValidationFailed` |
+| PAN blank or exactly 10 characters | `ValidationFailed` |
+| Accent colour blank or `#RGB` / `#RRGGBB` | `ValidationFailed` |
+| Address ≤ 500, terms ≤ 2000, footer ≤ 500 | `ValidationFailed` |
+| Company must exist | `NotFound` |
+
+Blank tax identifiers are **allowed** — a company may not be GST-registered. Validation runs before
+any write, so a rejected request stores nothing.
+
+`Gstin` and `Pan` are trimmed and upper-cased before storage; all other text is trimmed.
+
+**Writes touch only the settings table.** The `Company` columns are never updated, so the two can
+diverge after the first save — see `design-notes.md`.
+
+---
+
 ## `ICurrentCompanyProvider`
 
 ```csharp

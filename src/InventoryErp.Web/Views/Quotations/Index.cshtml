@@ -109,10 +109,17 @@ else
                                 <td class="cell-numeric text-muted-app">@quotation.LineCount</td>
                                 <td class="cell-numeric fw-semibold">@quotation.TotalAmount.ToString("N2")</td>
                                 <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-secondary"
-                                       asp-action="Details" asp-route-id="@quotation.Id">
-                                        View
-                                    </a>
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a class="btn btn-sm btn-outline-secondary"
+                                           asp-action="Details" asp-route-id="@quotation.Id">
+                                            View
+                                        </a>
+                                        <a class="btn btn-sm btn-outline-secondary btn-icon"
+                                           asp-action="Pdf" asp-route-id="@quotation.Id" target="_blank"
+                                           aria-label="PDF for @quotation.QuotationNumber" title="Download PDF">
+                                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-file" /></svg>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         }

@@ -302,6 +302,23 @@
         recalculate();
     }
 
+    /* ------------------------------------------------------- colour picker */
+
+    function initColorPicker() {
+        var picker = document.querySelector('[data-color-picker]');
+        var text = document.querySelector('[data-color-text]');
+        if (!picker || !text) { return; }
+
+        // The text input is the one that posts; the swatch only drives it.
+        picker.addEventListener('input', function () {
+            text.value = picker.value.toUpperCase();
+        });
+
+        text.addEventListener('input', function () {
+            if (/^#[0-9a-fA-F]{6}$/.test(text.value)) { picker.value = text.value; }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -311,5 +328,6 @@
         initDeleteConfirm();
         initAutoDismiss();
         initQuotationLines();
+        initColorPicker();
     });
 })();

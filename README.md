@@ -95,15 +95,23 @@ types and live in Infrastructure, so no ASP.NET dependency reaches Domain.
 
 These are tracked deliberately rather than forgotten:
 
-- **Tenant isolation is not enforced.** `CompanyId` is a column, not a boundary — reads are not
-  filtered by tenant and `CompanyId` is currently a user-editable form field. Needs an
-  `ICurrentTenant` abstraction plus a global query filter.
+- **Tenant isolation is enforced by convention, not by the database.** Services scope every query
+  by `CompanyId`, but there is no global query filter, and `CompanyId` is still a user-editable
+  field on the product create form. A caller that forgets to pass it, or a user who edits it, is
+  not stopped. Needs an ambient tenant context plus a query filter.
+- **`ICurrentCompanyProvider` resolves the single seeded company.** Correct while one company
+  exists; wrong the moment a second is added.
 - **Cascade delete does not fire on soft delete.** The database cascade only triggers on a hard
-  `DELETE`, which the application never issues.
-- **No seed data**, so no `Company` exists to own tenant-scoped records.
-- **Roles are declared but never seeded**, so `[Authorize(Roles = ...)]` would deny everyone.
-- **`IPdfGenerator` has no implementation** — injecting it will fail until a library is chosen.
-- Application services, DTOs and UI exist only for `Product`.
+  `DELETE`, which the application never issues — so soft-deleting a quotation would leave its lines
+  visible and orphaned.
+- **Roles are seeded but unused.** No controller applies `[Authorize(Roles = ...)]`; every
+  authenticated user has full access.
+- **Quotation numbering has a race.** Read-then-write is not atomic; the filtered unique index is
+  the real guarantee, with five retries before returning `Conflict`.
+- **No edit or delete for quotations**, and no UI for company records beyond Settings.
+- **Quotations have no status lifecycle** (draft / sent / accepted); the detail view infers
+  "Expired" from `ValidUntil` alone.
+- **QuestPDF's Community licence** is free only below a revenue threshold — revisit if that changes.
 
 ## Repository layout
 
