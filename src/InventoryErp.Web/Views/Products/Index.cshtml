@@ -1,0 +1,52 @@
+@using InventoryErp.Application.DTOs.Products
+@model IReadOnlyList<ProductDto>
+@{
+    ViewData["Title"] = "Products";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Products</h1>
+    <a class="btn btn-primary" asp-action="Create">New product</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">No products yet.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Name</th>
+                <th class="text-end">Unit price</th>
+                <th class="text-end">On hand</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Model)
+            {
+                <tr>
+                    <td>@product.Sku</td>
+                    <td>@product.Name</td>
+                    <td class="text-end">@product.UnitPrice.ToString("N2")</td>
+                    <td class="text-end">
+                        @product.QuantityOnHand
+                        @if (product.IsBelowReorderLevel)
+                        {
+                            <span class="badge bg-warning text-dark ms-1">Reorder</span>
+                        }
+                    </td>
+                    <td>@product.Status</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@product.Id">Details</a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@product.Id">Edit</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
