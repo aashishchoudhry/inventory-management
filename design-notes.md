@@ -28,6 +28,55 @@ That is a real trade-off: usernames can change, and there is no referential inte
 audit field and the user table. It was accepted because the alternative compromises the dependency
 rule, and audit fields are a historical record of who acted at the time.
 
+## Backend Design
+
+### Cookie-based Identity, no external providers, no JWT
+
+Authentication uses **ASP.NET Core Identity with cookie authentication** — username and password
+only. No external/social providers, no JWT bearer tokens. This matches Core scope.
+
+**Why cookies rather than JWT:** the frontend is server-rendered Razor MVC, not a SPA or a mobile
+client. The browser is the only consumer, and cookies are what a browser handles natively — sent
+automatically, `HttpOnly` so script cannot read them, and revocable server-side by dropping the
+session. JWTs solve a problem this application does not have (stateless auth across independently
+deployed services) while adding real ones: tokens cannot be revoked before expiry, and storing them
+in a browser means choosing between `localStorage`, which is readable by any injected script, and a
+cookie — at which point the cookie was the simpler answer.
+
+If an API for a mobile client or third-party integration is added later, bearer tokens can be layered
+alongside for those endpoints without disturbing the cookie flow for the web UI.
+
+Registration is configured with `RequireConfirmedAccount = false`, so no email confirmation step and
+no mail transport dependency. That is a development convenience and should be revisited before any
+real deployment. Password policy is left at Identity defaults apart from a raised minimum length of 8.
+
+### Identity user keyed on `Guid`
+
+`ApplicationUser` derives from `IdentityUser<Guid>` rather than the default `IdentityUser`, which is
+keyed on `string`. This makes user ids consistent with every domain entity, all of which use `Guid`
+primary keys through `BaseEntity`, and avoids `nvarchar(450)` key columns and their index cost.
+
+The custom fields are `FullName` and `IsActive`. `IsActive` allows an account to be disabled without
+deleting it, preserving audit history.
+
+### Identity lives in Infrastructure, registered in Web
+
+The types live in `InventoryErp.Infrastructure/Identity` because they derive from ASP.NET Identity
+base classes, which must not reach Domain. Registration happens in `Program.cs` rather than
+`AddInfrastructure()`, because `AddDefaultUI()` ships in the ASP.NET-only
+`Microsoft.AspNetCore.Identity.UI` package and calling it from Infrastructure would force a
+framework reference into that layer.
+
+### One DbContext for domain and Identity
+
+`InventoryErpDbContext` inherits `IdentityDbContext<ApplicationUser, ApplicationRole, Guid>`, so
+Identity tables and domain tables share a single context and a single migration history. A separate
+Identity context was considered and rejected: two contexts over one database means two migration
+histories and contested ownership of shared concerns, for no benefit at this scale.
+
+The trade-off is that Identity and domain concerns are coupled in one class. If Identity were ever
+moved to a separate store, this would need unpicking.
+
 ## `ServiceResult<T>` instead of exceptions
 
 Application services return `ServiceResult<T>` carrying a `ResultStatus` — `Success`, `NotFound`,

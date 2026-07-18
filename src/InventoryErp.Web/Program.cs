@@ -3,8 +3,10 @@ using InventoryErp.Application.Interfaces;
 using InventoryErp.Infrastructure;
 using InventoryErp.Infrastructure.Identity;
 using InventoryErp.Infrastructure.Persistence;
+using InventoryErp.Infrastructure.Persistence.Seeding;
 using InventoryErp.Web.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +30,17 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
+
+// Apply pending migrations, then seed sample data on first run. The seeder is a no-op once the
+// database holds a company, so this is safe on every startup.
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<InventoryErpDbContext>();
+    await context.Database.MigrateAsync();
+
+    var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+    await seeder.SeedAsync();
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

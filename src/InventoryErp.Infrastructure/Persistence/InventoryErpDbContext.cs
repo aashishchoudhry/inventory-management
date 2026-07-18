@@ -74,7 +74,9 @@ public class InventoryErpDbContext : IdentityDbContext<ApplicationUser, Applicat
     private void StampAuditFields()
     {
         var now = DateTime.UtcNow;
-        var user = _currentUser?.UserName;
+
+        // Falls back to "system" for saves with no HTTP context — startup seeding, background jobs.
+        var user = _currentUser?.UserName ?? "system";
 
         foreach (var entry in ChangeTracker.Entries<BaseEntity>())
         {

@@ -2,6 +2,7 @@ using InventoryErp.Application.Interfaces;
 using InventoryErp.Domain.Interfaces;
 using InventoryErp.Infrastructure.Persistence;
 using InventoryErp.Infrastructure.Persistence.Repositories;
+using InventoryErp.Infrastructure.Persistence.Seeding;
 using InventoryErp.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<DatabaseSeeder>();
 
         return services;
     }

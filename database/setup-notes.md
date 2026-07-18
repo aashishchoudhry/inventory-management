@@ -107,6 +107,39 @@ dotnet ef database update      -p src/InventoryErp.Infrastructure -s src/Invento
 
 The startup project is `InventoryErp.Web` because it holds the connection string and the DI wiring.
 
+### Convention: one migration per new entity
+
+**From this point on, every new database entity gets its own dedicated migration.** Do not bundle
+several entities into a single migration, and never regenerate or amend an existing migration to
+absorb a new change.
+
+The migration history is the record of how the schema evolved. One migration per entity keeps each
+change independently reviewable, revertible, and traceable to the step that introduced it.
+
+Name migrations after what they add — `AddSupplier`, `AddPurchaseOrder` — so `dotnet ef migrations
+list` reads as a changelog.
+
+```bash
+# 1. Wire the entity: DbSet on InventoryErpDbContext + an IEntityTypeConfiguration class
+# 2. Generate its migration
+dotnet ef migrations add Add<EntityName> \
+  --project src/InventoryErp.Infrastructure \
+  --startup-project src/InventoryErp.Web \
+  --output-dir Persistence/Migrations
+
+# 3. Apply it
+dotnet ef database update \
+  --project src/InventoryErp.Infrastructure \
+  --startup-project src/InventoryErp.Web
+```
+
+Always inspect the generated `Up()` before applying. An empty `Up()` means EF found no model
+changes — usually the entity was not actually wired into the context.
+
+> **The drop-and-recreate shortcut is retired.** It was used once early on, when a stale
+> `InitialCreate` predated the `Product` rework and nothing had shipped. The database now has a
+> history worth preserving; use additive migrations from here on.
+
 ### Creating and applying the initial migration
 
 Run from the repository root. `InventoryErp.Infrastructure` holds the migrations,
@@ -139,10 +172,28 @@ dotnet tool install --global dotnet-ef
 | --- | --- |
 | `20260718074523_InitialCreate` | Applied |
 
-Creates all six domain tables plus the eight ASP.NET Identity tables. It supersedes an earlier
+Creates all six domain tables plus the seven ASP.NET Identity tables. It supersedes an earlier
 `InitialCreate` that was generated before the `Product` rework and the remaining entities existed;
 that migration and its database were deleted rather than patched, since nothing had shipped and the
 database held only throwaway verification data.
+
+### Identity tables came in the same migration, not a second one
+
+`InventoryErpDbContext` derives from `IdentityDbContext<ApplicationUser, ApplicationRole, Guid>`, so
+the Identity schema is part of the same model and the same migration history. `InitialCreate`
+therefore creates both the domain tables and:
+
+`AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetRoleClaims`,
+`AspNetUserLogins`, `AspNetUserTokens`.
+
+A separate `AddIdentity` migration was attempted and **generated empty** — EF found no model changes,
+confirming Identity was already fully mapped. It was removed rather than committed, since an empty
+migration adds nothing but noise.
+
+`AspNetUsers` carries two custom columns from `ApplicationUser`: `FullName` (`nvarchar`) and
+`IsActive` (`bit`). Keys are `uniqueidentifier`, not the Identity default of `nvarchar(450)`, because
+`ApplicationUser` derives from `IdentityUser<Guid>` to match the `Guid` convention used by every
+domain entity.
 
 ### Resetting the development database
 
@@ -154,6 +205,49 @@ dotnet ef database update --project src/InventoryErp.Infrastructure --startup-pr
 ```
 
 Once the application has real data, replace this with an additive migration instead.
+
+## Seed data
+
+Sample data is written on first application launch by `DatabaseSeeder`
+(`InventoryErp.Infrastructure/Persistence/Seeding`). `Program.cs` applies pending migrations, then
+calls the seeder inside a service scope.
+
+**The seeder is idempotent.** It checks whether any `Company` exists — the tenant root — and returns
+immediately if one does. Restarting the application never duplicates data or modifies existing rows.
+Roles are checked separately so a role added later is still created on an already-seeded database.
+
+### Seeded login credentials
+
+| Field | Value |
+| --- | --- |
+| Email / username | `admin@inventoryerp.local` |
+| Password | `Admin@123456` |
+| Role | `Admin` |
+| Full name | System Administrator |
+
+> **Development only.** These credentials are hard-coded in `SeedData.cs` and committed to the
+> repository. They must never exist in a deployed environment. Before any real deployment, either
+> gate seeding to the Development environment or move the credentials to user secrets.
+
+### What gets seeded
+
+| Entity | Count | Notes |
+| --- | --- | --- |
+| `Company` | 1 | Sharma Industrial Supplies Pvt Ltd — all fields populated, including a valid-format GSTIN and PAN |
+| `ApplicationRole` | 3 | `Admin`, `Manager`, `StoreKeeper` — from `Roles.All` |
+| `ApplicationUser` | 1 | The admin above, email pre-confirmed so login works immediately |
+| `Product` | 8 | Varied GST slabs (5/12/18/28%), prices from ₹6.75 to ₹8,499, three below reorder level, one `Discontinued`, one with a null barcode |
+| `Customer` | 7 | Across Gujarat, Telangana, Kerala, Punjab, Rajasthan, West Bengal, Maharashtra. One deliberately has a null `Code` |
+| `CompanySetting` | 0 | Not seeded |
+| `Quotation` / `QuotationLine` | 0 | Not seeded |
+
+Audit fields on seeded rows show `CreatedBy = "system"`, because there is no HTTP context during
+startup. `InventoryErpDbContext` falls back to `"system"` when `ICurrentUser` yields no username.
+
+### Re-seeding
+
+Seeding only runs against a database with no company. To force a re-seed, delete the existing data
+(or drop and recreate the database) and restart the application.
 
 ## Verifying persistence after a restart
 

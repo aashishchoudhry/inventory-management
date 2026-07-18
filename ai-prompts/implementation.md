@@ -251,3 +251,177 @@ Then:
 - Tenant isolation still enforced only in service logic.
 - `Quotation` has no status/lifecycle field.
 - No application-layer services, DTOs or UI for `Company`, `Customer`, `Quotation`.
+
+---
+
+## 2026-07-18 — Identity wiring (already complete)
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now wire ASP.NET Core Identity into InventoryErpDbContext. Add ApplicationUser extending
+> IdentityUser with an extra fullName property, and change the DbContext to inherit from
+> IdentityDbContext<ApplicationUser> instead of DbContext. Register Identity services in Program.cs
+> (Web project) with cookie-based auth — no external providers, just username/password for now.
+>
+> Generate a new EF Core migration for the Identity tables (`dotnet ef migrations add AddIdentity`)
+> and give me the command to apply it.
+>
+> Then:
+> - Update database/setup-notes.md noting Identity tables were added via a second migration
+> - Update design-notes.md's Backend Design section with a short note on using cookie-based Identity
+>   (no external providers, no JWT — matches guide's Core scope)
+> - Update ai-prompts/implementation.md with this prompt, what Claude Code did, and your
+>   accept/change/reject
+>
+> Don't build the login UI or seed a user yet — that's the next two steps.
+
+### What Claude Code did
+
+Verified state before changing anything, and found **every code change in the request already
+existed**, having been done during the initial scaffold:
+
+| Requested | Actual state |
+| --- | --- |
+| `ApplicationUser` with `FullName` | Present, plus an `IsActive` flag |
+| DbContext inherits `IdentityDbContext` | Present — `IdentityDbContext<ApplicationUser, ApplicationRole, Guid>` |
+| Identity registered with cookie auth | Present — `AddIdentity` + `UseAuthentication()` |
+| Identity tables migrated | Present — 7 `AspNet*` tables created by `InitialCreate` |
+
+Rather than assert this, it demonstrated it: ran `dotnet ef migrations add AddIdentity`, which
+generated a migration with an **empty `Up()` method** — EF found no model changes. The empty
+migration was then removed with `dotnet ef migrations remove`.
+
+Also confirmed against the live database that `AspNetUsers` has `FullName` (`nvarchar`), `IsActive`
+(`bit`), and a `uniqueidentifier` primary key.
+
+No code was changed. The three documentation files were updated, since none of them previously
+described the Identity setup.
+
+### Accepted
+
+- **Verifying before acting.** Following the prompt literally would have meant rewriting working,
+  already-migrated Identity code.
+- **Generating the migration to prove it was empty**, rather than just claiming nothing was needed —
+  then removing it so the history stays clean.
+- **Documenting the reasoning for cookies over JWT** in `design-notes.md`: the frontend is
+  server-rendered Razor MVC, so the browser is the only consumer. JWTs would solve a problem this
+  application does not have while introducing revocation and storage difficulties.
+
+### Changed from the original request
+
+- **"Generate a new EF Core migration"** — not committed, because it was empty. The command was run
+  and its output shown instead.
+- **"noting Identity tables were added via a second migration"** — documented accurately as the
+  opposite: they came in `InitialCreate`, because Identity shares the DbContext and therefore the
+  migration history. Writing what the prompt asked for would have put a false statement in the docs.
+- **`IdentityDbContext<ApplicationUser>`** was not changed to the single-argument form; the existing
+  three-argument `<ApplicationUser, ApplicationRole, Guid>` is retained.
+
+### Rejected
+
+- **Did not change `IdentityUser<Guid>` to the default `IdentityUser`** (string key). The prompt
+  implied the default, but Guid keys match every domain entity, avoid `nvarchar(450)` key columns,
+  and changing would require touching four files plus dropping and recreating the database — for a
+  strictly worse result. Flagged for the user rather than actioned.
+
+### Open items after this step
+
+- Login UI and user seeding are the next two steps, as stated in the prompt.
+- `RequireConfirmedAccount = false` is a development convenience and needs revisiting before
+  deployment.
+- Roles are declared in `Roles.All` but never seeded, so `[Authorize(Roles = ...)]` would deny
+  everyone.
+
+---
+
+## 2026-07-18 — Startup database seeder
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now add a startup seeder that runs on app launch (only if the database is empty, don't re-seed
+> every run) and creates:
+>
+> - One seed Company with realistic sample values for all fields
+> - One seed ApplicationUser (with a role, e.g. "Admin") — give me the seeded email/password so I can
+>   log in and test later
+> - 5-8 seed Products with varied names, SKUs, prices, GST percentages, stock levels
+> - 5-8 seed Customers with varied names, cities, states
+>
+> Wire this into Program.cs so it runs after migrations are applied. Keep the seeding logic in
+> Infrastructure, not in Program.cs directly — a dedicated seeder class.
+>
+> Then:
+> - Update database/setup-notes.md's seed data description with exactly what gets seeded (counts, and
+>   note the seeded login credentials)
+> - Update candidate-info.md's Setup Summary section with the seeded login credentials
+> - Update ai-prompts/implementation.md with this prompt, what Claude Code did, and your
+>   accept/change/reject
+>
+> After this, restart the app and confirm the data is still there.
+
+### What Claude Code did
+
+- Created two classes in `InventoryErp.Infrastructure/Persistence/Seeding`:
+  - **`SeedData`** — the sample values, separated so they can be reviewed and changed without
+    touching seeding logic.
+  - **`DatabaseSeeder`** — the orchestration, registered as a scoped service in `AddInfrastructure`.
+- `Program.cs` holds only six lines of orchestration: create a scope, `MigrateAsync()`, then
+  `SeedAsync()`. All logic sits in Infrastructure.
+- **Idempotency** is keyed on whether any `Company` exists — the tenant root. Roles are checked
+  separately so a role added later is created even on an already-seeded database.
+- Seeded: 1 company, 3 roles, 1 admin user, 8 products, 7 customers.
+- Verified by running the application, checking the database, restarting, and checking again.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| First launch | 1 company, 8 products, 7 customers, 1 user, 3 roles |
+| **Second launch (restart)** | **Identical counts — no duplication** |
+| Seeded login | `admin@inventoryerp.local` signed in successfully |
+| Role assignment | User holds the `Admin` role, confirmed by SQL join |
+| Data renders | All 8 products listed at `/Products` with correct prices and GST |
+| Reorder badges | Fired on the three products below reorder level |
+| Audit stamping | Seeded rows show `CreatedBy = "system"` |
+
+### Accepted
+
+- **Splitting `SeedData` from `DatabaseSeeder`.** Sample values change often; seeding logic rarely.
+- **Idempotency keyed on `Company`** rather than a flag table or per-entity checks. The company is
+  the tenant root — if one exists, the database has been seeded.
+- **Realistic, varied sample data** rather than "Product 1..8": GST across all four Indian slabs,
+  prices spanning three orders of magnitude, three products deliberately below reorder level, one
+  `Discontinued`, one with a null barcode, and one customer with a null `Code` — the last two
+  exercise the nullable-unique-index and optional-field paths.
+
+### Changed beyond the request
+
+- **`InventoryErpDbContext` now falls back to `CreatedBy = "system"`** when `ICurrentUser` yields no
+  username. Without this, every seeded row had a null `CreatedBy`, since there is no HTTP context at
+  startup. This also benefits any future background job.
+- **`Program.cs` calls `MigrateAsync()`** before seeding. The prompt said the seeder should run
+  "after migrations are applied"; making the application apply them guarantees the ordering rather
+  than relying on someone having run `database update` first. See the caveat below.
+
+### Rejected
+
+- **Did not seed `CompanySetting`, `Quotation` or `QuotationLine`.** Not requested. Quotations in
+  particular need a decision on totals calculation before sample data would be meaningful.
+
+### Flagged
+
+- **The seeded credentials are committed to the repository.** Acceptable for a development sample,
+  but the account must not reach a deployed environment. Before deployment, either gate seeding to
+  the Development environment or move the password to user secrets.
+- **`MigrateAsync()` on startup is a development convenience.** With multiple application instances
+  it races, and it grants the application's connection schema-modification rights. Production
+  deployments normally apply migrations as a separate step.
+
+### Open items after this step
+
+- Seeding is not environment-gated; it runs in any environment.
+- Tenant isolation remains unenforced — the seeded company's id is not used to scope queries.

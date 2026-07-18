@@ -9,6 +9,37 @@
 | Repository | `inventory-management` (branch `main`) |
 | Start date | 2026-07-18 |
 
+## Setup Summary
+
+```bash
+dotnet run --project src/InventoryErp.Web
+```
+
+Migrations are applied and sample data seeded automatically on first launch. No manual database
+setup is required beyond a reachable SQL Server instance.
+
+### Seeded login
+
+| Field | Value |
+| --- | --- |
+| Email / username | `admin@inventoryerp.local` |
+| Password | `Admin@123456` |
+| Role | `Admin` |
+
+*Development credentials only — hard-coded in `SeedData.cs` and never intended for a deployed
+environment.*
+
+### Seeded data
+
+1 company, 3 roles, 1 admin user, 8 products, 7 customers. Seeding is skipped on subsequent runs, so
+restarting never duplicates data. Full detail in [database/setup-notes.md](database/setup-notes.md).
+
+| Item | Value |
+| --- | --- |
+| Database | SQL Server 2022, local default instance (`.`) |
+| Database name | `InventoryErp` |
+| Connection string | `ConnectionStrings:DefaultConnection` in `src/InventoryErp.Web/appsettings.json` |
+
 ## Project Summary
 
 An SME ERP / inventory management application built on **.NET 10** using **Clean Architecture**.
