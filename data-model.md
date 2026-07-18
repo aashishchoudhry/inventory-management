@@ -60,14 +60,49 @@ The trade-off is that type safety lives in the calling code rather than the data
 
 ## Product
 
+A sellable item, scoped to a company.
+
 | Field | Type | Notes |
 | --- | --- | --- |
 | `Id` | `Guid` | From `BaseEntity` |
-| `Sku` | `string` | Required, max 50. Unique index filtered on `IsDeleted = 0` |
+| `CompanyId` | `Guid` | Owning tenant |
 | `Name` | `string` | Required, max 200 |
+| `Sku` | `string` | Required, max 50. Unique per company, filtered on `IsDeleted = 0` |
+| `Barcode` | `string?` | EAN/UPC, max 50. Not every item carries one |
 | `Description` | `string?` | Max 1000 |
-| `UnitPrice` | `decimal` | `decimal(18,2)` |
-| `QuantityOnHand` | `int` | |
+| `SellingPrice` | `decimal` | `decimal(18,2)` |
+| `GstPercent` | `decimal` | `decimal(5,2)`. Rate as a percentage, e.g. `18.0` for 18% |
+| `CurrentStock` | `int` | |
 | `ReorderLevel` | `int` | |
-| `Status` | `ProductStatus` | Persisted as `int` |
-| `IsBelowReorderLevel` | `bool` | Computed, not mapped |
+| `Status` | `ProductStatus` | Persisted as `int` (`Active`, `Discontinued`) |
+| `IsBelowReorderLevel` | `bool` | Computed (`CurrentStock <= ReorderLevel`), not mapped |
+
+Indexes: unique on `(CompanyId, Sku)` filtered to non-deleted rows, plus a non-unique index on
+`CompanyId` for tenant-scoped queries.
+
+## Customer
+
+A party the company sells to, scoped to a company.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `Id` | `Guid` | From `BaseEntity` |
+| `CompanyId` | `Guid` | Owning tenant |
+| `Name` | `string` | Required |
+| `Code` | `string?` | Human-readable identifier, intended to be unique within the company |
+| `Mobile` | `string?` | |
+| `City` | `string?` | |
+| `State` | `string?` | |
+| `Address` | `string?` | |
+
+---
+
+## Multi-tenancy
+
+`Product`, `Customer` and `CompanySetting` all carry a `CompanyId`. Tenant isolation is currently
+enforced **only in application service logic** (for example, the product SKU duplicate check is
+scoped by `CompanyId`) — there is no global tenant query filter and no ambient tenant context yet.
+
+Until an `ICurrentTenant` abstraction exists, read methods such as `GetAllAsync` return rows across
+all tenants. This is a known gap, not a design decision. See the open items in
+`implementation-plan.md`.

@@ -48,18 +48,22 @@ public sealed class ProductService : IProductService
             return ServiceResult<ProductDto>.Invalid("SKU is required.");
         }
 
-        if (await Products.AnyAsync(p => p.Sku == sku, cancellationToken))
+        // SKU uniqueness is per tenant, matching the composite index on (CompanyId, Sku).
+        if (await Products.AnyAsync(p => p.CompanyId == request.CompanyId && p.Sku == sku, cancellationToken))
         {
             return ServiceResult<ProductDto>.Conflict($"A product with SKU '{sku}' already exists.");
         }
 
         var product = new Product
         {
-            Sku = sku,
+            CompanyId = request.CompanyId,
             Name = request.Name.Trim(),
+            Sku = sku,
+            Barcode = request.Barcode,
             Description = request.Description,
-            UnitPrice = request.UnitPrice,
-            QuantityOnHand = request.QuantityOnHand,
+            SellingPrice = request.SellingPrice,
+            GstPercent = request.GstPercent,
+            CurrentStock = request.CurrentStock,
             ReorderLevel = request.ReorderLevel,
             Status = request.Status,
         };
@@ -83,16 +87,21 @@ public sealed class ProductService : IProductService
 
         var sku = request.Sku.Trim();
 
-        if (await Products.AnyAsync(p => p.Sku == sku && p.Id != request.Id, cancellationToken))
+        if (await Products.AnyAsync(
+                p => p.CompanyId == request.CompanyId && p.Sku == sku && p.Id != request.Id,
+                cancellationToken))
         {
             return ServiceResult<ProductDto>.Conflict($"A product with SKU '{sku}' already exists.");
         }
 
-        product.Sku = sku;
+        product.CompanyId = request.CompanyId;
         product.Name = request.Name.Trim();
+        product.Sku = sku;
+        product.Barcode = request.Barcode;
         product.Description = request.Description;
-        product.UnitPrice = request.UnitPrice;
-        product.QuantityOnHand = request.QuantityOnHand;
+        product.SellingPrice = request.SellingPrice;
+        product.GstPercent = request.GstPercent;
+        product.CurrentStock = request.CurrentStock;
         product.ReorderLevel = request.ReorderLevel;
         product.Status = request.Status;
 
@@ -120,11 +129,14 @@ public sealed class ProductService : IProductService
     private static ProductDto ToDto(Product p) => new()
     {
         Id = p.Id,
-        Sku = p.Sku,
+        CompanyId = p.CompanyId,
         Name = p.Name,
+        Sku = p.Sku,
+        Barcode = p.Barcode,
         Description = p.Description,
-        UnitPrice = p.UnitPrice,
-        QuantityOnHand = p.QuantityOnHand,
+        SellingPrice = p.SellingPrice,
+        GstPercent = p.GstPercent,
+        CurrentStock = p.CurrentStock,
         ReorderLevel = p.ReorderLevel,
         Status = p.Status,
         IsBelowReorderLevel = p.IsBelowReorderLevel,

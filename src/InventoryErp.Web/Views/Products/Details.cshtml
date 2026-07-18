@@ -10,14 +10,20 @@
     <dt class="col-sm-3">SKU</dt>
     <dd class="col-sm-9">@Model.Sku</dd>
 
+    <dt class="col-sm-3">Barcode</dt>
+    <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.Barcode) ? "—" : Model.Barcode)</dd>
+
     <dt class="col-sm-3">Description</dt>
     <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.Description) ? "—" : Model.Description)</dd>
 
-    <dt class="col-sm-3">Unit price</dt>
-    <dd class="col-sm-9">@Model.UnitPrice.ToString("N2")</dd>
+    <dt class="col-sm-3">Selling price</dt>
+    <dd class="col-sm-9">@Model.SellingPrice.ToString("N2")</dd>
 
-    <dt class="col-sm-3">Quantity on hand</dt>
-    <dd class="col-sm-9">@Model.QuantityOnHand</dd>
+    <dt class="col-sm-3">GST %</dt>
+    <dd class="col-sm-9">@Model.GstPercent.ToString("N2")</dd>
+
+    <dt class="col-sm-3">Current stock</dt>
+    <dd class="col-sm-9">@Model.CurrentStock</dd>
 
     <dt class="col-sm-3">Reorder level</dt>
     <dd class="col-sm-9">@Model.ReorderLevel</dd>

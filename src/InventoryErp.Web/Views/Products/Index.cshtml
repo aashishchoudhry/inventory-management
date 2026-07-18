@@ -20,8 +20,9 @@ else
             <tr>
                 <th>SKU</th>
                 <th>Name</th>
-                <th class="text-end">Unit price</th>
-                <th class="text-end">On hand</th>
+                <th class="text-end">Selling price</th>
+                <th class="text-end">GST %</th>
+                <th class="text-end">Stock</th>
                 <th>Status</th>
                 <th></th>
             </tr>
@@ -32,9 +33,10 @@ else
                 <tr>
                     <td>@product.Sku</td>
                     <td>@product.Name</td>
-                    <td class="text-end">@product.UnitPrice.ToString("N2")</td>
+                    <td class="text-end">@product.SellingPrice.ToString("N2")</td>
+                    <td class="text-end">@product.GstPercent.ToString("N2")</td>
                     <td class="text-end">
-                        @product.QuantityOnHand
+                        @product.CurrentStock
                         @if (product.IsBelowReorderLevel)
                         {
                             <span class="badge bg-warning text-dark ms-1">Reorder</span>

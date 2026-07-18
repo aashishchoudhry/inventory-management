@@ -11,16 +11,22 @@
         <form asp-action="Edit">
             <div asp-validation-summary="All" class="text-danger mb-3"></div>
             <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="CompanyId" />
 
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
             <div class="mb-3">
                 <label asp-for="Sku" class="form-label"></label>
                 <input asp-for="Sku" class="form-control" />
                 <span asp-validation-for="Sku" class="text-danger"></span>
             </div>
             <div class="mb-3">
-                <label asp-for="Name" class="form-label"></label>
-                <input asp-for="Name" class="form-control" />
-                <span asp-validation-for="Name" class="text-danger"></span>
+                <label asp-for="Barcode" class="form-label"></label>
+                <input asp-for="Barcode" class="form-control" />
+                <span asp-validation-for="Barcode" class="text-danger"></span>
             </div>
             <div class="mb-3">
                 <label asp-for="Description" class="form-label"></label>
@@ -28,14 +34,19 @@
                 <span asp-validation-for="Description" class="text-danger"></span>
             </div>
             <div class="mb-3">
-                <label asp-for="UnitPrice" class="form-label"></label>
-                <input asp-for="UnitPrice" class="form-control" />
-                <span asp-validation-for="UnitPrice" class="text-danger"></span>
+                <label asp-for="SellingPrice" class="form-label"></label>
+                <input asp-for="SellingPrice" class="form-control" />
+                <span asp-validation-for="SellingPrice" class="text-danger"></span>
             </div>
             <div class="mb-3">
-                <label asp-for="QuantityOnHand" class="form-label"></label>
-                <input asp-for="QuantityOnHand" class="form-control" />
-                <span asp-validation-for="QuantityOnHand" class="text-danger"></span>
+                <label asp-for="GstPercent" class="form-label"></label>
+                <input asp-for="GstPercent" class="form-control" />
+                <span asp-validation-for="GstPercent" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="CurrentStock" class="form-label"></label>
+                <input asp-for="CurrentStock" class="form-control" />
+                <span asp-validation-for="CurrentStock" class="text-danger"></span>
             </div>
             <div class="mb-3">
                 <label asp-for="ReorderLevel" class="form-label"></label>

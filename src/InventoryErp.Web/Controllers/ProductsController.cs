@@ -68,11 +68,14 @@ public class ProductsController : Controller
         return View(new UpdateProductRequest
         {
             Id = product.Id,
-            Sku = product.Sku,
+            CompanyId = product.CompanyId,
             Name = product.Name,
+            Sku = product.Sku,
+            Barcode = product.Barcode,
             Description = product.Description,
-            UnitPrice = product.UnitPrice,
-            QuantityOnHand = product.QuantityOnHand,
+            SellingPrice = product.SellingPrice,
+            GstPercent = product.GstPercent,
+            CurrentStock = product.CurrentStock,
             ReorderLevel = product.ReorderLevel,
             Status = product.Status,
         });
