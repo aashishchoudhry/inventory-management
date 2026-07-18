@@ -1363,3 +1363,120 @@ The layout should be eyeballed by a human before this is considered done.
 - The PDF layout has not been visually reviewed — see the limitation above.
 - No PDF for anything other than quotations.
 - Rendering is synchronous and in-process; a large batch would tie up request threads.
+
+---
+
+## 2026-07-18 — Global search
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now add global search — top-nav search box, minimum 2 characters, querying Products, Customers,
+> and Quotations by keyword and returning a combined result list with links to each item's
+> detail/edit page.
+>
+> In InventoryErp.Application, add ISearchService/SearchService (not raw DbContext calls in the
+> controller) that searches Products by name/SKU/barcode, Customers by name/code, Quotations by
+> quotationNumber, and returns a combined result with a type label and a link to each item's detail
+> page.
+>
+> In InventoryErp.Web, add the search box in the shared layout (top nav) with a results dropdown or a
+> dedicated results page — your call, tell me which and why. Enforce the 2-character minimum.
+>
+> Then update api-contract.md, ui-flow.md, acceptance-criteria.md, ai-prompts/implementation.md.
+> Test manually: search by a partial product name, a customer name, and a quotation number.
+
+### UI decision: **both** a dropdown and a results page
+
+They answer different questions, and picking one would have left a real gap:
+
+- The **dropdown** serves the common case — jumping to a record you already know exists. A results
+  page costs a full navigation for that.
+- The **page** handles what a dropdown cannot: many matches, a shareable URL, and working with
+  JavaScript disabled.
+
+The nav `<form>` GETs to `/Search`, so the dropdown is a **progressive enhancement** layered on top
+rather than the only way in. Typing and pressing Enter works without any JavaScript.
+
+### What Claude Code did
+
+- `ISearchService` / `SearchService` in Application, **composing the three entity services** rather
+  than querying repositories directly, so matching rules and tenant scoping stay defined once.
+- Added `SearchAsync` to `ICustomerService` (name, code) and `IQuotationService` (number).
+  `ProductService.SearchAsync` already covered name/SKU/barcode and was reused unchanged, as the
+  prompt suggested. `GetAllAsync` on both now delegates to `SearchAsync` with a null keyword — one
+  code path rather than two that can drift.
+- `SearchController` with `Index` (HTML) and `Suggest` (JSON), plus a results page.
+- Nav search box in `_TopBar`, and a vanilla-JS dropdown: 200 ms debounce, request abortion,
+  grouped results, ↓/↑/Enter/Escape, and Ctrl/Cmd+K to focus.
+- 21 new tests, taking the suite from 121 to **142**.
+
+### A layout bug found by screenshotting
+
+The first dropdown render put the title, subtitle and price **on one line, overlapping** — the
+title and subtitle are `<span>`s, which are inline by default, so `.app-search__text` needed
+`display: flex; flex-direction: column`. The panel also scrolled sideways; fixed with
+`overflow-x: hidden` so long names truncate instead.
+
+This was only visible in a screenshot. The DOM assertions all passed — the right elements with the
+right text were present, just unreadable.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Partial product name `hel` | Safety Helmet |
+| Product barcode `8901234500048` | Safety Helmet |
+| Customer name `patel` | Patel Engineering Works |
+| Customer code `CUST-1001` | Patel Engineering Works |
+| Quotation number `QT-2026` | QT-2026-0001 |
+| Mixed `pa` | 2 products + 1 customer, grouped |
+| Single character `h` | No request sent; page says "Enter at least 2 characters" |
+| No match | Empty state with the term echoed |
+| Case-insensitivity | `helmet` = `HELMET` |
+| Keyboard | ↓↓ highlights the second row; Escape closes |
+| Links | Real detail routes for products and quotations |
+| 375 px | Box usable, no horizontal overflow |
+| Console errors | None |
+| Build / tests | Clean, 0 warnings; **142/142 passing** |
+
+### Accepted
+
+- **Composing services, not repositories.** Global search inherits any future change to an entity's
+  matching rules for free, and tenant scoping is not reimplemented in a third place.
+- **The minimum enforced server-side**, not only in the browser. `/Search/Suggest` is reachable
+  directly, and a one-character search would scan every table.
+- **`SearchResultDto` carries no URL.** Route shapes are a web concern; Application returns a type
+  and an id, and `SearchResultRoutes` maps them. Keeps routing knowledge out of Application.
+- **Aborting in-flight requests**, so a slow early keystroke cannot overwrite a later, more
+  specific result — a classic autocomplete bug.
+- **Per-type counts are the real totals**, not the capped page, so "See all 12 results" is honest
+  even when only 5 are shown.
+
+### Changed beyond the request
+
+- **Added `SearchAsync` to the customer and quotation services**, needed for the fields specified.
+- **Both UI surfaces**, per the decision above.
+- **Ctrl/Cmd+K shortcut** — the convention users expect from this control.
+- **`GetAllAsync` now delegates to `SearchAsync`** on both services, removing duplicated query code.
+
+### Rejected
+
+- **No parallel `Task.WhenAll`** across the three services. They share one scoped `DbContext`, which
+  is not thread-safe; it would throw intermittently under load. Three sequential round trips is
+  correct at this scale.
+- Did not search quotations by customer name. The prompt said number only, and widening the match
+  silently would make "why did this appear?" harder to answer.
+- No full-text index or relevance ranking. `LIKE` is fine for this data volume; results are grouped
+  by type and ordered within it, not scored.
+
+### Open items after this step
+
+- **Customer hits link to the customer list**, not a detail page — none exists. Made explicit in
+  `SearchResultRoutes.HasDetailPage` and the button reads "View list", so it is a visible gap rather
+  than a dead link.
+- No relevance ranking; an exact SKU match sorts no higher than a loose name match.
+- `LOWER()` in every predicate prevents index seeks — the first thing to revisit if search slows.
+- Search covers products, customers and quotations only; settings and company records are not
+  searchable.

@@ -1,0 +1,142 @@
+@using InventoryErp.Application.DTOs.Search
+@using InventoryErp.Web.Models
+@model SearchViewModel
+@{
+    ViewData["Title"] = Model.IsEmptyQuery ? "Search" : $"Search: {Model.Keyword}";
+    var results = Model.Results;
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">Search</h2>
+        <p class="page-header__subtitle">
+            @if (results is not null)
+            {
+                <span>
+                    @results.TotalCount @(results.TotalCount == 1 ? "result" : "results")
+                    for “@Model.Keyword”
+                </span>
+            }
+            else
+            {
+                <span>Products, customers and quotations</span>
+            }
+        </p>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" asp-action="Index" class="d-flex flex-wrap gap-2" role="search">
+            <div class="flex-grow-1" style="max-width: 30rem;">
+                <label class="visually-hidden" for="q">Search</label>
+                <input type="search" id="q" name="q" value="@Model.Keyword" class="form-control"
+                       placeholder="Product, customer or quotation number…"
+                       minlength="2" autocomplete="off" autofocus />
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+                Search
+            </button>
+        </form>
+    </div>
+</div>
+
+@if (Model.Message is not null)
+{
+    <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+        <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div>@Model.Message</div>
+    </div>
+}
+else if (Model.IsEmptyQuery)
+{
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">
+                <svg class="icon icon-lg" aria-hidden="true"><use href="#i-search" /></svg>
+            </div>
+            <p class="empty-state__title">Search across the whole system</p>
+            <p class="empty-state__text mb-0">
+                Products by name, SKU or barcode · Customers by name or code ·
+                Quotations by number
+            </p>
+        </div>
+    </div>
+}
+else if (results!.TotalCount == 0)
+{
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">
+                <svg class="icon icon-lg" aria-hidden="true"><use href="#i-search" /></svg>
+            </div>
+            <p class="empty-state__title">No results for “@Model.Keyword”</p>
+            <p class="empty-state__text mb-0">Try a different term, or a partial name or code.</p>
+        </div>
+    </div>
+}
+else
+{
+    @if (results.IsTruncated)
+    {
+        <p class="form-hint mb-2">
+            Showing the first matches of each type. Narrow the search to see fewer, more precise results.
+        </p>
+    }
+
+    @foreach (var group in results.Items.GroupBy(i => i.Type).OrderBy(g => g.Key))
+    {
+        var total = group.Key switch
+        {
+            SearchResultType.Product => results.ProductCount,
+            SearchResultType.Customer => results.CustomerCount,
+            _ => results.QuotationCount,
+        };
+
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center gap-2">
+                <svg class="icon icon-sm" aria-hidden="true">
+                    <use href="@("#" + SearchResultRoutes.Icon(group.Key))" />
+                </svg>
+                <span>@SearchResultRoutes.Label(group.Key)s</span>
+                <span class="badge-pill badge-pill--muted ms-1">@total</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <tbody>
+                        @foreach (var item in group)
+                        {
+                            var (controller, action) = SearchResultRoutes.For(item.Type);
+                            <tr>
+                                <td>
+                                    <div>@item.Title</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                                    {
+                                        <div class="small text-muted-app">@item.Subtitle</div>
+                                    }
+                                </td>
+                                <td class="cell-numeric text-muted-app">@item.Meta</td>
+                                <td class="text-end" style="width: 7rem;">
+                                    @if (SearchResultRoutes.HasDetailPage(item.Type))
+                                    {
+                                        <a class="btn btn-sm btn-outline-secondary"
+                                           asp-controller="@controller" asp-action="@action"
+                                           asp-route-id="@item.Id">Open</a>
+                                    }
+                                    else
+                                    {
+                                        @* No per-customer page exists yet — link to the list. *@
+                                        <a class="btn btn-sm btn-outline-secondary"
+                                           asp-controller="@controller" asp-action="@action">View list</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}

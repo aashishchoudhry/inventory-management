@@ -30,6 +30,17 @@ public interface IQuotationService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// One page of quotations whose number contains <paramref name="keyword"/>, newest first.
+    /// A blank keyword returns all quotations, matching <see cref="GetAllAsync"/>.
+    /// </summary>
+    Task<ServiceResult<PagedResult<QuotationListItemDto>>> SearchAsync(
+        Guid companyId,
+        string? keyword,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// A single quotation with its lines, or <c>NotFound</c> if it does not exist in the company.
     /// </summary>
     Task<ServiceResult<QuotationDto>> GetByIdAsync(

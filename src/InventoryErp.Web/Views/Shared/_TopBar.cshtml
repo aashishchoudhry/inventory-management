@@ -7,7 +7,22 @@
         <svg class="icon" aria-hidden="true"><use href="#i-menu" /></svg>
     </button>
 
-    <h1 class="app-topbar__title">@Model</h1>
+    <h1 class="app-topbar__title d-none d-md-block">@Model</h1>
+
+    @* Submits to the full results page, so search works with JavaScript disabled. The dropdown
+       is a progressive enhancement layered on top. *@
+    <form class="app-search" method="get" asp-controller="Search" asp-action="Index" role="search"
+          data-global-search autocomplete="off">
+        <svg class="icon icon-sm app-search__icon" aria-hidden="true"><use href="#i-search" /></svg>
+        <label class="visually-hidden" for="global-search-input">Search</label>
+        <input type="search" id="global-search-input" name="q" class="form-control app-search__input"
+               placeholder="Search products, customers, quotations…"
+               minlength="2" role="combobox" aria-expanded="false"
+               aria-controls="global-search-results" aria-autocomplete="list"
+               data-search-input />
+        <div class="app-search__panel" id="global-search-results" role="listbox"
+             data-search-panel hidden></div>
+    </form>
 
     <div class="ms-auto d-flex align-items-center gap-2">
         <button type="button" class="btn btn-icon btn-outline-secondary"

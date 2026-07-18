@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using InventoryErp.Application.Common;
 using InventoryErp.Application.DTOs.Customers;
 using InventoryErp.Application.Interfaces;
@@ -23,8 +24,16 @@ public sealed class CustomerService : ICustomerService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ServiceResult<PagedResult<CustomerDto>>> GetAllAsync(
+    public Task<ServiceResult<PagedResult<CustomerDto>>> GetAllAsync(
         Guid companyId,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+        => SearchAsync(companyId, keyword: null, pageNumber, pageSize, cancellationToken);
+
+    public async Task<ServiceResult<PagedResult<CustomerDto>>> SearchAsync(
+        Guid companyId,
+        string? keyword,
         int pageNumber = 1,
         int pageSize = 20,
         CancellationToken cancellationToken = default)
@@ -36,10 +45,20 @@ public sealed class CustomerService : ICustomerService
             return ServiceResult<PagedResult<CustomerDto>>.Invalid(errors);
         }
 
+        // Lower-cased explicitly rather than relying on the database collation — same reasoning
+        // as ProductService.SearchAsync.
+        var term = keyword?.Trim().ToLowerInvariant();
+
         // Tenant scoping is part of the predicate: a customer belonging to another company
         // can never be returned.
+        Expression<Func<Customer, bool>> predicate = string.IsNullOrWhiteSpace(term)
+            ? c => c.CompanyId == companyId
+            : c => c.CompanyId == companyId
+                   && (c.Name.ToLower().Contains(term)
+                       || (c.Code != null && c.Code.ToLower().Contains(term)));
+
         var page = await _unitOfWork.Repository<Customer>().ListPagedAsync(
-            predicate: c => c.CompanyId == companyId,
+            predicate,
             orderBy: c => c.Name,
             pageNumber,
             pageSize,

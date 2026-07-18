@@ -371,8 +371,53 @@ Quotations). Active state is derived from `ViewContext.RouteData`, so a page add
 without editing the partial. Company settings is deliberately absent — no controller exists for it,
 and a nav link to a 404 is worse than no link.
 
-The top bar holds the drawer toggle (below `lg`), the page title, the theme toggle and the user
-dropdown.
+The top bar holds the drawer toggle (below `lg`), the page title, **the global search box**, the
+theme toggle and the user dropdown.
+
+## Global search
+
+**Available from every page** — it lives in the shared top bar, not on a screen of its own. There is
+no "Search" sidebar entry, because search is a way to move around the app rather than a place in it.
+
+### Both a dropdown and a page, deliberately
+
+| Surface | Route | Purpose |
+| --- | --- | --- |
+| Nav dropdown | `GET /Search/Suggest?q=` (JSON) | Jump straight to a record you already know exists — the common case |
+| Results page | `GET /Search?q=` (HTML) | Browse many matches, share the URL, or work without JavaScript |
+
+The two answer different questions. A dropdown alone cannot show more than a handful of hits or be
+linked to; a page alone costs a full navigation every time you want to open a product you can
+already name. The nav `<form>` GETs to the results page, so the dropdown is a **progressive
+enhancement** — with JavaScript off, typing and pressing Enter still works.
+
+### Behaviour
+
+| Aspect | Detail |
+| --- | --- |
+| Minimum length | **2 characters.** Enforced in the service *and* client-side, which simply avoids pointless requests |
+| Debounce | 200 ms after the last keystroke |
+| Stale responses | Each request aborts the previous one, so a slow early keystroke cannot overwrite a later, more specific result |
+| Grouping | Results grouped by type with a heading, each row showing title, subtitle and a right-aligned value |
+| Keyboard | ↓/↑ move, Enter opens, Escape closes. **Ctrl/Cmd + K** focuses the box |
+| Footer | "See all N results" links to the full page |
+
+### States
+
+| State | Dropdown | Results page |
+| --- | --- | --- |
+| **Under 2 characters** | Stays closed; no request sent | "Enter at least 2 characters to search." |
+| **No keyword** | — | Prompt listing what is searchable |
+| **Loading** | Previous results stay visible until replaced, so the panel does not flicker | Server-rendered; no intermediate state |
+| **Results** | Grouped, capped at 5 per type | Grouped, capped at 25 per type, with per-type counts |
+| **Truncated** | "See all N results" | "Showing the first matches of each type…" |
+| **No match** | "No results for *keyword*" | Empty state with the term echoed |
+
+### What each result links to
+
+Products and quotations open their detail page. **Customers link to the customer list**, because no
+per-customer detail screen exists yet — handled explicitly in `SearchResultRoutes.HasDetailPage`
+rather than silently producing a dead link, and the button reads "View list" instead of "Open".
 
 ## Responsive behaviour
 

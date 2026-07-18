@@ -319,6 +319,145 @@
         });
     }
 
+    /* --------------------------------------------------------- global search */
+
+    function initGlobalSearch() {
+        var form = document.querySelector('[data-global-search]');
+        if (!form) { return; }
+
+        var input = form.querySelector('[data-search-input]');
+        var panel = form.querySelector('[data-search-panel]');
+        if (!input || !panel) { return; }
+
+        var MIN_CHARS = 2;
+        var DEBOUNCE_MS = 200;
+
+        var timer = null;
+        var controller = null;
+        var activeIndex = -1;
+
+        function close() {
+            panel.hidden = true;
+            panel.innerHTML = '';
+            input.setAttribute('aria-expanded', 'false');
+            activeIndex = -1;
+        }
+
+        function open() {
+            panel.hidden = false;
+            input.setAttribute('aria-expanded', 'true');
+        }
+
+        function escapeHtml(value) {
+            var div = document.createElement('div');
+            div.textContent = value == null ? '' : value;
+            return div.innerHTML;
+        }
+
+        function render(data, term) {
+            if (!data.items.length) {
+                panel.innerHTML = '<div class="app-search__empty">No results for “'
+                    + escapeHtml(term) + '”</div>';
+                open();
+                return;
+            }
+
+            var html = '';
+            var lastType = null;
+
+            data.items.forEach(function (item) {
+                if (item.type !== lastType) {
+                    html += '<div class="app-search__group">' + escapeHtml(item.type) + 's</div>';
+                    lastType = item.type;
+                }
+
+                html += '<a class="app-search__item" role="option" href="' + item.url + '">'
+                    + '<svg class="icon icon-sm" aria-hidden="true"><use href="#' + escapeHtml(item.icon) + '"></use></svg>'
+                    + '<span class="app-search__text">'
+                    + '<span class="app-search__title">' + escapeHtml(item.title) + '</span>'
+                    + (item.subtitle ? '<span class="app-search__subtitle">' + escapeHtml(item.subtitle) + '</span>' : '')
+                    + '</span>'
+                    + (item.meta ? '<span class="app-search__meta">' + escapeHtml(item.meta) + '</span>' : '')
+                    + '</a>';
+            });
+
+            html += '<div class="app-search__footer">'
+                + '<a class="app-search__item" href="/Search?q=' + encodeURIComponent(term) + '">'
+                + '<svg class="icon icon-sm" aria-hidden="true"><use href="#i-search"></use></svg>'
+                + '<span class="app-search__text"><span class="app-search__title">'
+                + 'See all ' + data.total + ' result' + (data.total === 1 ? '' : 's')
+                + '</span></span></a></div>';
+
+            panel.innerHTML = html;
+            open();
+        }
+
+        function query(term) {
+            // Abort the previous request so a slow early keystroke cannot overwrite the
+            // results of a later, more specific one.
+            if (controller) { controller.abort(); }
+            controller = new AbortController();
+
+            fetch('/Search/Suggest?q=' + encodeURIComponent(term), {
+                credentials: 'same-origin',
+                signal: controller.signal
+            })
+                .then(function (res) { return res.ok ? res.json() : null; })
+                .then(function (data) { if (data) { render(data, term); } })
+                .catch(function () { /* aborted or offline — leave the panel as it is */ });
+        }
+
+        input.addEventListener('input', function () {
+            var term = input.value.trim();
+            window.clearTimeout(timer);
+
+            // The minimum is enforced on the server too; this just avoids pointless requests.
+            if (term.length < MIN_CHARS) { close(); return; }
+
+            timer = window.setTimeout(function () { query(term); }, DEBOUNCE_MS);
+        });
+
+        input.addEventListener('keydown', function (e) {
+            var options = panel.querySelectorAll('.app-search__item');
+
+            if (e.key === 'Escape') { close(); input.blur(); return; }
+
+            if (e.key === 'Enter' && activeIndex >= 0 && options[activeIndex]) {
+                e.preventDefault();
+                options[activeIndex].click();
+                return;
+            }
+
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') { return; }
+            if (!options.length) { return; }
+
+            e.preventDefault();
+            activeIndex += e.key === 'ArrowDown' ? 1 : -1;
+            if (activeIndex < 0) { activeIndex = options.length - 1; }
+            if (activeIndex >= options.length) { activeIndex = 0; }
+
+            options.forEach(function (o, i) { o.classList.toggle('is-active', i === activeIndex); });
+            options[activeIndex].scrollIntoView({ block: 'nearest' });
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!form.contains(e.target)) { close(); }
+        });
+
+        input.addEventListener('focus', function () {
+            if (input.value.trim().length >= MIN_CHARS && panel.innerHTML) { open(); }
+        });
+
+        // Ctrl/Cmd+K focuses search, the convention users expect.
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                input.focus();
+                input.select();
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -329,5 +468,6 @@
         initAutoDismiss();
         initQuotationLines();
         initColorPicker();
+        initGlobalSearch();
     });
 })();

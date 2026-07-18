@@ -331,6 +331,77 @@ diverge after the first save — see `design-notes.md`.
 
 ---
 
+## `ISearchService`
+
+`InventoryErp.Application/Interfaces/ISearchService.cs`, implemented by
+`InventoryErp.Application/Services/SearchService.cs`.
+
+Composes `IProductService`, `ICustomerService` and `IQuotationService` rather than querying
+repositories directly, so each entity's matching rules and tenant scoping stay defined in exactly
+one place. Adding a searchable field to products changes `ProductService` alone, and global search
+inherits it.
+
+### `SearchAsync`
+
+```csharp
+Task<ServiceResult<SearchResultsDto>> SearchAsync(
+    Guid companyId,
+    string? keyword,
+    int perTypeLimit = 5,
+    CancellationToken cancellationToken = default);
+```
+
+| Input | Rules |
+| --- | --- |
+| `companyId` | Required. `Guid.Empty` → `ValidationFailed` |
+| `keyword` | Trimmed. **Minimum 2 characters** → shorter is `ValidationFailed` |
+| `perTypeLimit` | 1–50. Caps hits *per entity type*, not overall |
+
+### What is searched
+
+| Type | Fields | Delegates to |
+| --- | --- | --- |
+| Product | Name, SKU, barcode | `ProductService.SearchAsync` (unchanged — already covered all three) |
+| Customer | Name, code | `CustomerService.SearchAsync` (**added**) |
+| Quotation | Quotation number | `QuotationService.SearchAsync` (**added**) |
+
+All matching is case-insensitive *contains*, lower-cased explicitly rather than relying on database
+collation — consistent with the rest of the app.
+
+### Output — `SearchResultsDto`
+
+| Member | Notes |
+| --- | --- |
+| `Items` | Combined list; each `SearchResultDto` carries `Type`, `Id`, `Title`, `Subtitle`, `Meta` |
+| `ProductCount` / `CustomerCount` / `QuotationCount` | **Full** match counts, not the capped page |
+| `TotalCount` | Sum of the three |
+| `IsTruncated` | True when any type's real count exceeded `perTypeLimit` |
+
+`SearchResultDto` deliberately **carries no URL**. Route shapes are a web concern, so the caller
+maps `Type` + `Id` onto a link via `SearchResultRoutes` in the web layer. This keeps Application
+free of routing knowledge.
+
+An empty result is `Success`, not `NotFound`.
+
+> **Sequential, not parallel.** The three services share one scoped `DbContext`, which is not
+> thread-safe; `Task.WhenAll` would throw intermittently. Three sequential round trips is the
+> correct trade for this scale.
+
+### Web endpoints
+
+| Route | Returns | Notes |
+| --- | --- | --- |
+| `GET /Search?q={keyword}` | HTML results page | `perTypeLimit` 25. Shareable URL, works without JavaScript |
+| `GET /Search/Suggest?q={keyword}` | JSON | `perTypeLimit` 5. Backs the nav dropdown |
+
+`Suggest` returns `{ items: [], total: 0, truncated: false }` — **not** a 400 — for a keyword under
+2 characters. The dropdown polls as the user types, and an error per keystroke would be noise. The
+service still enforces the minimum; the endpoint just declines to call it.
+
+Each JSON item carries a resolved `url`, built server-side from the type.
+
+---
+
 ## `ICurrentCompanyProvider`
 
 ```csharp

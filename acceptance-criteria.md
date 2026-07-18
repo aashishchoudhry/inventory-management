@@ -18,6 +18,7 @@
 | 8 | A user can create a quotation with multiple line items via the UI | **Met** | 2026-07-18 |
 | 9 | A user can view the quotation list and open a detail view | **Met** | 2026-07-18 |
 | 10 | Backend validation rejects invalid quotations | **Met** | 2026-07-18 |
+| 11 | Global search returns relevant products and customers (and quotations) | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -156,6 +157,32 @@ throughout, confirmed by SQL.
 
 Covered additionally by 25 service-level tests including unknown customer, unknown product, negative
 price, cross-tenant references, and `ValidUntil` earlier than the quotation date.
+
+### 11. Global search returns relevant products and customers (and quotations)
+
+Available from the top bar on every page. Verified against the seeded database:
+
+| Query | Matched | Result |
+| --- | --- | --- |
+| `hel` | Product name | Safety Helmet (Yellow, ISI Marked) |
+| `8901234500048` | Product barcode | Safety Helmet |
+| `patel` | Customer name | Patel Engineering Works |
+| `CUST-1001` | Customer code | Patel Engineering Works |
+| `QT-2026` | Quotation number | QT-2026-0001 |
+| `pa` | Mixed | 2 products + 1 customer, grouped by type |
+| `h` | — | **No request sent**; page shows "Enter at least 2 characters to search." |
+| `zzznothing` | — | "No results for *zzznothing*" |
+
+**All three entity types return results**, individually and combined.
+
+Other checks: matching is case-insensitive (`helmet` = `HELMET`); results link to real detail pages
+(`/Products/Details/{id}`, `/Quotations/Details/{id}`); keyboard navigation highlights and opens
+rows; Escape closes the dropdown; the box remains usable at 375px with no horizontal overflow; no
+console errors.
+
+Covered by 21 service tests, including the 2-character minimum, per-field matching for each type,
+case-insensitivity, and **tenant isolation** — a second company with a same-named customer and
+product never appears in the first company's results.
 
 ## Not yet stated
 

@@ -149,8 +149,16 @@ public sealed class QuotationService : IQuotationService
 
     // -------------------------------------------------------------------- read
 
-    public async Task<ServiceResult<PagedResult<QuotationListItemDto>>> GetAllAsync(
+    public Task<ServiceResult<PagedResult<QuotationListItemDto>>> GetAllAsync(
         Guid companyId,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+        => SearchAsync(companyId, keyword: null, pageNumber, pageSize, cancellationToken);
+
+    public async Task<ServiceResult<PagedResult<QuotationListItemDto>>> SearchAsync(
+        Guid companyId,
+        string? keyword,
         int pageNumber = 1,
         int pageSize = 20,
         CancellationToken cancellationToken = default)
@@ -162,9 +170,16 @@ public sealed class QuotationService : IQuotationService
             return ServiceResult<PagedResult<QuotationListItemDto>>.Invalid(errors);
         }
 
+        var term = keyword?.Trim().ToLowerInvariant();
+
+        System.Linq.Expressions.Expression<Func<Quotation, bool>> predicate =
+            string.IsNullOrWhiteSpace(term)
+                ? q => q.CompanyId == companyId
+                : q => q.CompanyId == companyId && q.QuotationNumber.ToLower().Contains(term);
+
         // Newest first: a quotation list is a work queue, not a reference table.
         var page = await Quotations.ListPagedAsync(
-            predicate: q => q.CompanyId == companyId,
+            predicate,
             orderBy: q => q.QuotationDate,
             pageNumber,
             pageSize,
