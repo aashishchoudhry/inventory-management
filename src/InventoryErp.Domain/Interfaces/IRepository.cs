@@ -15,6 +15,22 @@ public interface IRepository<T> where T : BaseEntity
         Expression<Func<T, bool>>? predicate = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns one page of matching rows plus the total match count. Paging and counting happen
+    /// in the database — callers must not fetch everything and page in memory.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="orderBy"/> is generic over the key type rather than
+    /// <c>Expression&lt;Func&lt;T, object&gt;&gt;</c>, which would box value-typed keys and can
+    /// fail to translate to SQL.
+    /// </remarks>
+    Task<PagedResult<T>> ListPagedAsync<TKey>(
+        Expression<Func<T, bool>>? predicate,
+        Expression<Func<T, TKey>> orderBy,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task<bool> AnyAsync(
         Expression<Func<T, bool>> predicate,
         CancellationToken cancellationToken = default);

@@ -1,15 +1,38 @@
-@using InventoryErp.Application.DTOs.Products
 @using InventoryErp.Domain.Enums
 @using InventoryErp.Web.Models
-@model IReadOnlyList<ProductDto>
+@model ProductListViewModel
 @{
     ViewData["Title"] = "Products";
+    var list = Model.Page;
+    var hasItems = list.Items.Count > 0;
+    // Derived from the items actually on this page. Computing from PageNumber alone produces
+    // nonsense such as "Showing 21–8 of 8" when the requested page is past the end.
+    var from = hasItems ? ((list.PageNumber - 1) * list.PageSize) + 1 : 0;
+    var to = from + list.Items.Count - 1;
+    var pastEnd = !hasItems && list.TotalCount > 0;
 }
 
 <div class="page-header">
     <div>
         <h2 class="page-header__title">Products</h2>
-        <p class="page-header__subtitle" data-filter-status>@Model.Count items</p>
+        <p class="page-header__subtitle">
+            @if (Model.LoadError is not null)
+            {
+                <span>—</span>
+            }
+            else if (!hasItems)
+            {
+                <span>No products</span>
+            }
+            else
+            {
+                <span>Showing @from–@to of @list.TotalCount</span>
+                @if (Model.IsSearch)
+                {
+                    <span> matching “@Model.Keyword”</span>
+                }
+            }
+        </p>
     </div>
     <a class="btn btn-primary" asp-action="Create">
         <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
@@ -17,106 +40,180 @@
     </a>
 </div>
 
-@if (Model.Count == 0)
+@if (Model.LoadError is not null)
 {
-    <div class="card">
-        <partial name="_EmptyState" model="@(new EmptyStateViewModel {
-            Icon = "i-box",
-            Title = "No products yet",
-            Message = "Add your first product to start tracking stock.",
-            ActionText = "New product",
-            ActionController = "Products",
-            ActionAction = "Create"
-        })" />
+    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+        <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div>@Model.LoadError</div>
     </div>
 }
 else
 {
     <div class="card">
         <div class="card-header">
-            <label class="visually-hidden" for="product-search">Search products</label>
-            <div class="input-reveal" style="max-width: 22rem;">
-                <input type="search" id="product-search" class="form-control"
-                       placeholder="Search by SKU, name or barcode…"
-                       data-table-filter="#products-table" />
-            </div>
+            @* GET so a search is a shareable URL and the back button works. *@
+            <form method="get" asp-action="Index" class="d-flex flex-wrap gap-2" role="search">
+                <div class="input-reveal flex-grow-1" style="max-width: 24rem;">
+                    <label class="visually-hidden" for="q">Search products</label>
+                    <input type="search" id="q" name="q" value="@Model.Keyword"
+                           class="form-control"
+                           placeholder="Search by name, SKU or barcode…"
+                           autocomplete="off" />
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+                    Search
+                </button>
+                @if (Model.IsSearch)
+                {
+                    <a class="btn btn-outline-secondary" asp-action="Index">Clear</a>
+                }
+            </form>
         </div>
 
-        @* table-responsive keeps the horizontal scroll inside the card rather than
-           forcing the whole page to scroll sideways on mobile. *@
-        <div class="table-responsive">
-            <table class="table table-hover" id="products-table">
-                <thead>
-                    <tr>
-                        <th scope="col">SKU</th>
-                        <th scope="col">Name</th>
-                        <th scope="col" class="cell-numeric">Price</th>
-                        <th scope="col" class="cell-numeric">GST</th>
-                        <th scope="col" class="cell-numeric">Stock</th>
-                        <th scope="col">Status</th>
-                        <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var product in Model)
-                    {
+        @if (!hasItems)
+        {
+            @if (pastEnd)
+            {
+                @* Requested page is beyond the last one — say so rather than showing an
+                   empty table with no explanation. *@
+                <div class="empty-state">
+                    <div class="empty-state__icon">
+                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-inbox" /></svg>
+                    </div>
+                    <p class="empty-state__title">Page @list.PageNumber is empty</p>
+                    <p class="empty-state__text">
+                        There @(list.TotalCount == 1 ? "is" : "are") only @list.TotalCount
+                        @(list.TotalCount == 1 ? "product" : "products") in this list.
+                    </p>
+                    <a class="btn btn-outline-secondary"
+                       asp-action="Index" asp-route-q="@Model.Keyword" asp-route-page="1" asp-route-pageSize="@list.PageSize">
+                        Back to first page
+                    </a>
+                </div>
+            }
+            else if (Model.IsSearch)
+            {
+                <div class="empty-state">
+                    <div class="empty-state__icon">
+                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-search" /></svg>
+                    </div>
+                    <p class="empty-state__title">No products match “@Model.Keyword”</p>
+                    <p class="empty-state__text">
+                        Try a different name, SKU or barcode — or clear the search to see everything.
+                    </p>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Clear search</a>
+                </div>
+            }
+            else
+            {
+                <partial name="_EmptyState" model="@(new EmptyStateViewModel {
+                    Icon = "i-box",
+                    Title = "No products yet",
+                    Message = "Add your first product to start tracking stock.",
+                    ActionText = "New product",
+                    ActionController = "Products",
+                    ActionAction = "Create"
+                })" />
+            }
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
                         <tr>
-                            <td><code>@product.Sku</code></td>
-                            <td>
-                                <div>@product.Name</div>
-                                @if (!string.IsNullOrWhiteSpace(product.Barcode))
-                                {
-                                    <div class="small text-muted-app">@product.Barcode</div>
-                                }
-                            </td>
-                            <td class="cell-numeric">@product.SellingPrice.ToString("N2")</td>
-                            <td class="cell-numeric text-muted-app">@product.GstPercent.ToString("0.##")%</td>
-                            <td class="cell-numeric">
-                                @if (product.IsBelowReorderLevel)
-                                {
-                                    <span class="badge-pill badge-pill--warn"
-                                          title="At or below reorder level of @product.ReorderLevel">
-                                        @product.CurrentStock
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span>@product.CurrentStock</span>
-                                }
-                            </td>
-                            <td>
-                                @if (product.Status == ProductStatus.Active)
-                                {
-                                    <span class="badge-pill badge-pill--ok">Active</span>
-                                }
-                                else
-                                {
-                                    <span class="badge-pill badge-pill--muted">Discontinued</span>
-                                }
-                            </td>
-                            <td>
-                                <div class="d-flex gap-1 justify-content-end">
-                                    <a class="btn btn-sm btn-outline-secondary btn-icon"
-                                       asp-action="Details" asp-route-id="@product.Id"
-                                       aria-label="Details for @product.Name" title="Details">
-                                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye-detail" /></svg>
-                                    </a>
-                                    <a class="btn btn-sm btn-outline-secondary btn-icon"
-                                       asp-action="Edit" asp-route-id="@product.Id"
-                                       aria-label="Edit @product.Name" title="Edit">
-                                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-edit" /></svg>
-                                    </a>
-                                </div>
-                            </td>
+                            <th scope="col">Name</th>
+                            <th scope="col">SKU</th>
+                            <th scope="col">Barcode</th>
+                            <th scope="col" class="cell-numeric">Selling price</th>
+                            <th scope="col" class="cell-numeric">GST</th>
+                            <th scope="col" class="cell-numeric">Stock</th>
+                            <th scope="col">Status</th>
+                            <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
                         </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in list.Items)
+                        {
+                            <tr>
+                                <td>@product.Name</td>
+                                <td><code>@product.Sku</code></td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(product.Barcode))
+                                    {
+                                        <span class="text-muted-app">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted-app">@product.Barcode</span>
+                                    }
+                                </td>
+                                <td class="cell-numeric">@product.SellingPrice.ToString("N2")</td>
+                                <td class="cell-numeric text-muted-app">@product.GstPercent.ToString("0.##")%</td>
+                                <td class="cell-numeric">
+                                    @if (product.IsBelowReorderLevel)
+                                    {
+                                        <span class="badge-pill badge-pill--warn"
+                                              title="At or below reorder level of @product.ReorderLevel">
+                                            @product.CurrentStock
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>@product.CurrentStock</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (product.Status == ProductStatus.Active)
+                                    {
+                                        <span class="badge-pill badge-pill--ok">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-pill badge-pill--muted">Discontinued</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a class="btn btn-sm btn-outline-secondary btn-icon"
+                                           asp-action="Details" asp-route-id="@product.Id"
+                                           aria-label="Details for @product.Name" title="Details">
+                                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye-detail" /></svg>
+                                        </a>
+                                        <a class="btn btn-sm btn-outline-secondary btn-icon"
+                                           asp-action="Edit" asp-route-id="@product.Id"
+                                           aria-label="Edit @product.Name" title="Edit">
+                                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-edit" /></svg>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
 
-        <div class="empty-state" data-filter-empty hidden>
-            <p class="empty-state__title">No matching products</p>
-            <p class="empty-state__text mb-0">Try a different search term.</p>
-        </div>
+            @if (list.TotalPages > 1)
+            {
+                <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <span class="text-muted-app small">Page @list.PageNumber of @list.TotalPages</span>
+                    <nav aria-label="Product pages">
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item @(list.HasPreviousPage ? "" : "disabled")">
+                                <a class="page-link" asp-action="Index"
+                                   asp-route-q="@Model.Keyword"
+                                   asp-route-page="@(list.PageNumber - 1)" asp-route-pageSize="@list.PageSize">Previous</a>
+                            </li>
+                            <li class="page-item @(list.HasNextPage ? "" : "disabled")">
+                                <a class="page-link" asp-action="Index"
+                                   asp-route-q="@Model.Keyword"
+                                   asp-route-page="@(list.PageNumber + 1)" asp-route-pageSize="@list.PageSize">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            }
+        }
     </div>
 }

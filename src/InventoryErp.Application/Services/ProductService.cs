@@ -1,13 +1,22 @@
+using System.Linq.Expressions;
 using InventoryErp.Application.Common;
 using InventoryErp.Application.DTOs.Products;
 using InventoryErp.Application.Interfaces;
+using InventoryErp.Domain.Common;
 using InventoryErp.Domain.Entities;
 using InventoryErp.Domain.Interfaces;
 
-namespace InventoryErp.Infrastructure.Services;
+namespace InventoryErp.Application.Services;
 
+/// <summary>
+/// Application service for products. Depends only on the <see cref="IUnitOfWork"/> abstraction —
+/// no EF Core types reach this layer.
+/// </summary>
 public sealed class ProductService : IProductService
 {
+    /// <summary>Guards against a caller requesting an unbounded page.</summary>
+    private const int MaxPageSize = 200;
+
     private readonly IUnitOfWork _unitOfWork;
 
     public ProductService(IUnitOfWork unitOfWork)
@@ -17,15 +26,51 @@ public sealed class ProductService : IProductService
 
     private IRepository<Product> Products => _unitOfWork.Repository<Product>();
 
-    public async Task<ServiceResult<IReadOnlyList<ProductDto>>> GetAllAsync(CancellationToken cancellationToken = default)
-    {
-        var products = await Products.ListAsync(cancellationToken: cancellationToken);
-        IReadOnlyList<ProductDto> dtos = products
-            .OrderBy(p => p.Name)
-            .Select(ToDto)
-            .ToList();
+    public Task<ServiceResult<PagedResult<ProductDto>>> GetAllAsync(
+        Guid companyId,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+        => SearchAsync(companyId, keyword: null, pageNumber, pageSize, cancellationToken);
 
-        return ServiceResult<IReadOnlyList<ProductDto>>.Success(dtos);
+    public async Task<ServiceResult<PagedResult<ProductDto>>> SearchAsync(
+        Guid companyId,
+        string? keyword,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var errors = ValidatePaging(companyId, pageNumber, pageSize);
+
+        if (errors.Count > 0)
+        {
+            return ServiceResult<PagedResult<ProductDto>>.Invalid(errors);
+        }
+
+        // Lower-cased explicitly rather than relying on the database collation. SQL Server's
+        // default collation is case-insensitive, but that is a database setting, not a guarantee —
+        // and the in-memory provider used by tests is case-sensitive. Being explicit makes the
+        // behaviour identical everywhere. The cost is that LOWER() prevents an index seek, which
+        // is acceptable at this scale but is the first thing to revisit if search gets slow.
+        var term = keyword?.Trim().ToLowerInvariant();
+
+        // Tenant scoping is part of the predicate, not an afterthought: every branch below
+        // starts from CompanyId, so a product from another company can never be returned.
+        Expression<Func<Product, bool>> predicate = string.IsNullOrWhiteSpace(term)
+            ? p => p.CompanyId == companyId
+            : p => p.CompanyId == companyId
+                   && (p.Name.ToLower().Contains(term)
+                       || p.Sku.ToLower().Contains(term)
+                       || (p.Barcode != null && p.Barcode.ToLower().Contains(term)));
+
+        var page = await Products.ListPagedAsync(
+            predicate,
+            orderBy: p => p.Name,
+            pageNumber,
+            pageSize,
+            cancellationToken);
+
+        return ServiceResult<PagedResult<ProductDto>>.Success(page.Map(ToDto));
     }
 
     public async Task<ServiceResult<ProductDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -124,6 +169,32 @@ public sealed class ProductService : IProductService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return ServiceResult.Success();
+    }
+
+    private static List<string> ValidatePaging(Guid companyId, int pageNumber, int pageSize)
+    {
+        var errors = new List<string>();
+
+        if (companyId == Guid.Empty)
+        {
+            errors.Add("A company must be specified.");
+        }
+
+        if (pageNumber < 1)
+        {
+            errors.Add("Page number must be 1 or greater.");
+        }
+
+        if (pageSize < 1)
+        {
+            errors.Add("Page size must be 1 or greater.");
+        }
+        else if (pageSize > MaxPageSize)
+        {
+            errors.Add($"Page size must not exceed {MaxPageSize}.");
+        }
+
+        return errors;
     }
 
     private static ProductDto ToDto(Product p) => new()

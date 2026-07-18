@@ -609,3 +609,109 @@ table scrolling inside its own container as designed.
 - No column sorting on the products table.
 - Dashboard aggregates products only.
 - Tenant isolation is unchanged and still unenforced.
+
+---
+
+## 2026-07-18 — Products list and search
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now build the Products feature — list and search only, no create/edit yet (that's Stretch per the
+> guide).
+>
+> In InventoryErp.Application, add IProductService/ProductService returning ServiceResult<T>, no
+> DbContext usage anywhere outside Infrastructure. Implement:
+> - GetAll(companyId) — paged list, scoped to the seeded company
+> - Search(companyId, keyword) — match against name, SKU, or barcode
+>
+> In InventoryErp.Web, add ProductsController + a Razor view with a search box and a table of results
+> (name, SKU, barcode, selling price, GST%, stock). Handle the empty-results case cleanly in the UI.
+>
+> Then update api-contract.md, ui-flow.md, acceptance-criteria.md, ai-prompts/implementation.md.
+> Test the search manually (by name, SKU, and barcode) before committing.
+
+### What Claude Code did
+
+**Moved `ProductService` from Infrastructure to Application.** It already depended only on
+`IUnitOfWork` — never a `DbContext` — so the move was clean and satisfies "no DbContext outside
+Infrastructure" while putting the application service in the application layer. `AddInfrastructure`
+now registers persistence only; `AddApplication` registers the services.
+
+Added, to support real paging:
+
+- `PagedResult<T>` in `Domain/Common` — items plus total count, with a `Map` for entity → DTO.
+- `IRepository<T>.ListPagedAsync` — paging and `COUNT` execute **in the database**. Generic over the
+  order-by key type rather than `Expression<Func<T, object>>`, which boxes value types and can fail
+  to translate to SQL.
+- `ICurrentCompanyProvider` — supplies the tenant, since nothing links a user to a company yet.
+
+`GetAllAsync` delegates to `SearchAsync` with a null keyword: listing is search with no filter, so
+there is one code path rather than two that can drift.
+
+Rebuilt `/Products` around server-side search and paging (GET, so URLs are shareable), with four
+distinct empty/error states. Added 16 tests, taking the suite from 14 to 30.
+
+### Two real bugs found by testing
+
+1. **Search was case-sensitive.** A unit test on the in-memory provider failed where SQL Server had
+   silently passed, because SQL Server's *default collation* is case-insensitive. Relying on that
+   makes behaviour depend on a per-database setting. Fixed by lower-casing both sides explicitly, so
+   it behaves identically on every provider. This is exactly the class of bug that only appears in
+   a different environment.
+2. **`/Products?page=2` with 8 items rendered "Showing 21–8 of 8"** over an unexplained empty table.
+   The range was computed from `PageNumber` rather than from the items actually present. Fixed, and
+   given its own "Page N is empty" state.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Search by name | `helmet` → 1 result |
+| Case-insensitivity | `HELMET`, `Helmet`, `helmet` → same result |
+| Search by SKU | `PPE-HLM` → 1 result |
+| Search by barcode | `8901234500048` → 1 result |
+| No match | `zzz-nothing` → 0 with a dedicated empty state |
+| Blank keyword | All 8 products |
+| Paging | `pageSize=3` → pages of 3, 3, 2; "Page N of 3"; term preserved across pages |
+| Invalid paging | `?page=0` → "Page number must be 1 or greater." |
+| Layering | No EF Core reference in Application or Domain |
+| Build / tests | Clean, 0 warnings; **30/30 passing** |
+
+### Accepted
+
+- **Moving the service to Application** rather than adding a second one, keeping one implementation.
+- **Database-side paging.** Fetching everything and paging in memory would have been simpler and
+  wrong.
+- **Empty results are `Success`, not `NotFound`.** "Nothing matched" is a valid answer to a valid
+  question; `NotFound` stays reserved for lookup by id.
+- **Rejecting invalid paging rather than clamping it**, so `?page=0` explains itself.
+
+### Changed from the original request
+
+- **Create, edit and delete were kept, not removed.** The prompt said "no create/edit yet", which
+  describes what to build; those already existed from the scaffold, work, are covered by tests and
+  are wired into the UI. Deleting working features to match a scope label would have been
+  destructive. They are now labelled Stretch in `api-contract.md`. Say the word to remove them.
+- **`ICurrentCompanyProvider` was added** — not in the prompt, but `companyId` had no source. It
+  resolves the single seeded company, which is honest scaffolding toward real tenant context.
+- **`pageSize` exposed as a query parameter**, so paging is actually verifiable with only 8 seeded
+  products.
+
+### Rejected
+
+- Did not use `EF.Functions.Like` for search, which would have put an EF Core dependency in the
+  Application layer.
+- Did not keep the previous client-side JavaScript row filter: it only ever filtered the rendered
+  page, so it silently lied once paging existed.
+
+### Open items after this step
+
+- The dashboard aggregates over one page of 200 products, so its figures understate beyond that.
+  Correct fix is dedicated aggregate queries.
+- No column sorting; order is always by name.
+- `LOWER()` in the search predicate prevents an index seek — the first thing to revisit if search
+  gets slow.
+- Tenant isolation still depends on callers passing the right `companyId`; there is no global
+  query filter enforcing it.

@@ -1,6 +1,7 @@
 using InventoryErp.Application.Common;
 using InventoryErp.Application.DTOs.Products;
 using InventoryErp.Application.Interfaces;
+using InventoryErp.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,20 +10,60 @@ namespace InventoryErp.Web.Controllers;
 [Authorize]
 public class ProductsController : Controller
 {
-    private readonly IProductService _productService;
+    private const int DefaultPageSize = 20;
 
-    public ProductsController(IProductService productService)
+    private readonly IProductService _productService;
+    private readonly ICurrentCompanyProvider _currentCompany;
+
+    public ProductsController(IProductService productService, ICurrentCompanyProvider currentCompany)
     {
         _productService = productService;
+        _currentCompany = currentCompany;
     }
 
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists products for the current company, optionally filtered by <paramref name="q"/>.
+    /// Search and listing share one action so the URL is shareable and the browser back button
+    /// behaves — a search is just <c>/Products?q=term</c>.
+    /// </summary>
+    public async Task<IActionResult> Index(
+        string? q,
+        int page = 1,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _productService.GetAllAsync(cancellationToken);
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
 
-        return result.IsSuccess
-            ? View(result.Data)
-            : Problem(result.Error);
+        if (companyId is null)
+        {
+            return View(new ProductListViewModel
+            {
+                Keyword = q,
+                LoadError = "No company has been configured yet, so there are no products to show.",
+            });
+        }
+
+        // Out-of-range values are rejected by the service rather than silently clamped here,
+        // so the user sees why instead of getting unexpected results.
+        var result = await _productService.SearchAsync(
+            companyId.Value,
+            q,
+            page,
+            pageSize ?? DefaultPageSize,
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return View(new ProductListViewModel
+            {
+                Keyword = q,
+                LoadError = result.ValidationErrors.Count > 0
+                    ? string.Join(" ", result.ValidationErrors)
+                    : result.Error,
+            });
+        }
+
+        return View(new ProductListViewModel { Page = result.Data!, Keyword = q });
     }
 
     public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)

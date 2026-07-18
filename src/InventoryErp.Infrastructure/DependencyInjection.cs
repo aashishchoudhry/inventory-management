@@ -1,9 +1,7 @@
-using InventoryErp.Application.Interfaces;
 using InventoryErp.Domain.Interfaces;
 using InventoryErp.Infrastructure.Persistence;
 using InventoryErp.Infrastructure.Persistence.Repositories;
 using InventoryErp.Infrastructure.Persistence.Seeding;
-using InventoryErp.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,9 +21,10 @@ public static class DependencyInjection
         // Identity itself is registered by the web composition root, because the default
         // Identity UI is an ASP.NET-only concern that this layer must not depend on.
 
+        // Persistence implementations only. Application services (IProductService and friends)
+        // live in the Application layer and are registered by AddApplication.
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<IProductService, ProductService>();
         services.AddScoped<DatabaseSeeder>();
 
         return services;

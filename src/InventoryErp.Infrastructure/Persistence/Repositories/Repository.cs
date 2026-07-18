@@ -31,6 +31,32 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         return await query.ToListAsync(cancellationToken);
     }
 
+    public async Task<PagedResult<T>> ListPagedAsync<TKey>(
+        Expression<Func<T, bool>>? predicate,
+        Expression<Func<T, TKey>> orderBy,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _set.AsNoTracking();
+
+        if (predicate is not null)
+        {
+            query = query.Where(predicate);
+        }
+
+        // COUNT runs before Skip/Take so it reflects all matches, not just this page.
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderBy(orderBy)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<T>(items, totalCount, pageNumber, pageSize);
+    }
+
     public Task<bool> AnyAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default)
         => _set.AnyAsync(predicate, cancellationToken);
 

@@ -108,7 +108,48 @@ A **POST** form in the nav bar, not a link, with an antiforgery token. A GET log
 by any third-party `<img>` or anchor pointing at the URL. On success the user returns to
 `/Account/Login`.
 
-## Product flow
+## Products screen
+
+`/Products` — `ProductsController.Index` + `Views/Products/Index.cshtml`.
+
+Listing and search are **one action and one URL**, because a search is just a filtered list. The
+form uses **GET**, so a search is a shareable, bookmarkable URL and the browser back button behaves:
+
+```
+/Products                            all products, page 1
+/Products?q=helmet                   filtered
+/Products?q=helmet&page=2            filtered, page 2
+/Products?pageSize=3                 explicit page size (max 200)
+```
+
+Search and paging happen **in the database**, not in the browser. An earlier iteration filtered rows
+client-side with JavaScript over whatever had been rendered; that only ever searched the current
+page and could not scale.
+
+### Columns
+
+Name, SKU, barcode, selling price, GST %, stock, status, row actions. Barcode shows an em-dash when
+absent. Stock shows a warning pill when at or below the reorder level.
+
+### States
+
+| State | Appearance |
+| --- | --- |
+| **Success** | Table of results. Header reads "Showing 1–8 of 8", plus "matching *keyword*" when searching |
+| **Loading** | None — the page is server-rendered, so there is no intermediate state. The submit button shows a spinner while the request is in flight |
+| **Empty — no products at all** | `_EmptyState` partial: "No products yet" with a *New product* call to action |
+| **Empty — search matched nothing** | Distinct state: "No products match *keyword*", guidance to try another term, and a *Clear search* button. Deliberately different from the above — the cause and the useful next action differ |
+| **Empty — page past the end** | "Page 3 is empty · There are only 8 products in this list" with *Back to first page*. Fixes a bug found during testing that rendered "Showing 21–8 of 8" over an unexplained empty table |
+| **Error** | Red alert with the message; the table is not rendered. Covers no company configured, and invalid paging arguments |
+
+### Paging
+
+The pager appears only when there is more than one page. Previous/Next are disabled at the ends and
+carry `q` and `pageSize` through, so paging never silently drops the search term.
+
+Invalid arguments are **rejected by the service, not clamped by the controller** — `?page=0` shows
+"Page number must be 1 or greater." rather than silently showing page 1, so the user learns what
+happened.
 
 ## Product flow
 
@@ -136,7 +177,7 @@ by any third-party `<img>` or anchor pointing at the URL. On success the user re
 | Route | View | Notes |
 | --- | --- | --- |
 | `/` | `Home/Index.cshtml` | **Dashboard** — four stat tiles (total products, active, below reorder, stock value) and a "Needs reordering" table. Data from the existing `IProductService`; no new service was added |
-| `/Products` | `Products/Index.cshtml` | Card-wrapped `.table-responsive` table with search, status/reorder pills, icon row actions, and an empty state |
+| `/Products` | `Products/Index.cshtml` | **Server-side** search and paging. See the dedicated section below |
 | `/Products/Create` | `Create.cshtml` | Grouped sections (Identification / Pricing / Stock), two-column on `md+`. **`CompanyId` is a raw text input** marked with an amber border and an explanatory hint — a visible placeholder pending tenant context, deliberately not disguised as finished |
 | `/Products/Edit/{id}` | `Edit.cshtml` | Same shape; `Id` and `CompanyId` hidden |
 | `/Products/Details/{id}` | `Details.cshtml` | Detail card with computed GST-inclusive price, a stock card, and a "Danger zone" delete behind a confirmation modal |

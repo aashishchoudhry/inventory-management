@@ -13,6 +13,7 @@
 | 3 | A user can log out | **Met** | 2026-07-18 |
 | 4 | Protected pages are inaccessible when signed out | **Met** | 2026-07-18 |
 | 5 | Invalid credentials produce a clear error, not a crash | **Met** | 2026-07-18 |
+| 6 | A user can list and search products from the database | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -62,6 +63,33 @@ something each controller must opt into.
 Submitting the correct email with a wrong password redisplayed the form with *"Invalid email or
 password."* in an alert — no exception, no stack trace. The same message is returned for an unknown
 account and an inactive account, so the form cannot be used to enumerate valid email addresses.
+
+### 6. A user can list and search products from the database
+
+**Listing.** `/Products` renders all 8 seeded products with name, SKU, barcode, selling price,
+GST % and stock, headed "Showing 1–8 of 8". Data comes from SQL Server through
+`ProductService.GetAllAsync`, scoped to the company via `ICurrentCompanyProvider`.
+
+**Search**, verified against the real database:
+
+| Query | Matches on | Result |
+| --- | --- | --- |
+| `helmet` | Name | 1 — Safety Helmet (Yellow, ISI Marked) |
+| `HELMET` / `Helmet` | Name, case-insensitive | 1 — same product |
+| `PPE-HLM` | SKU | 1 — Safety Helmet |
+| `8901234500048` | Barcode | 1 — Safety Helmet |
+| `wheel` | Name | 1 — Cut-Off Wheel 4 inch |
+| `zzz-nothing` | — | 0, with a "No products match" state |
+| *(blank)* | — | All 8 |
+
+**Paging**, verified at `pageSize=3`: page 1 shows 1–3 of 8, page 2 shows 4–6, page 3 shows 7–8,
+"Page N of 3" throughout, and Previous/Next carry the search term across pages.
+
+**Empty and error states** all render distinctly — no products at all, search matched nothing, page
+past the end, and invalid paging arguments.
+
+Covered by 30 passing unit tests, including tenant isolation (a search does not return another
+company's products) and exclusion of soft-deleted rows.
 
 ## Not yet stated
 
