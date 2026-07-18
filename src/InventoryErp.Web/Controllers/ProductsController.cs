@@ -47,6 +47,7 @@ public class ProductsController : Controller
 
         if (result.IsSuccess)
         {
+            TempData["Success"] = $"Product '{result.Data!.Name}' was created.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -94,6 +95,7 @@ public class ProductsController : Controller
 
         if (result.IsSuccess)
         {
+            TempData["Success"] = $"Product '{result.Data!.Name}' was updated.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -112,7 +114,13 @@ public class ProductsController : Controller
     {
         var result = await _productService.DeleteAsync(id, cancellationToken);
 
-        return result.IsSuccess ? RedirectToAction(nameof(Index)) : Failed(result);
+        if (!result.IsSuccess)
+        {
+            return Failed(result);
+        }
+
+        TempData["Success"] = "Product was deleted.";
+        return RedirectToAction(nameof(Index));
     }
 
     /// <summary>Maps a non-success <see cref="ServiceResult"/> onto an HTTP response.</summary>

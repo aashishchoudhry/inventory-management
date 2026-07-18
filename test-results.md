@@ -65,6 +65,28 @@ Run during the scaffold step against the running app.
 | Audit stamping | `CreatedBy` persisted as the signed-in username, confirmed by direct SQL |
 | Server error log | Clean |
 
+### UI verification — 2026-07-18
+
+Run after the design-system work, at 375px, 768px and 1280px.
+
+| Check | Result |
+| --- | --- |
+| Static assets signed out | **200** with correct content types (was 302 — see `debugging-notes.md` #8) |
+| Console errors | None |
+| Network 404s | None |
+| Horizontal page scroll at 375px | None — `window.scrollX` max is 0; wide tables scroll inside `.table-responsive` |
+| Dark mode | Toggles, persists across navigation, no light flash on first paint |
+| Mobile drawer | Opens with backdrop, closes on Escape, body scroll restored |
+| Sidebar active state | Correct on Dashboard and Products |
+| Dashboard figures | 8 products, 7 active, 3 below reorder — matches seeded data |
+| Table filter | "helmet" → 1 of 8 items, count announced |
+| Create product | Persisted, success flash, list count 8 → 9 |
+| Duplicate SKU | Renders as a form error, not an exception |
+| Delete modal | Names the product, deletes, flashes, count back to 8 |
+| Logout | Returns to `/Account/Login` |
+
+Test data created during this run was deleted afterwards; the database is back to its seeded state.
+
 ## Not yet covered
 
 - No automated test exercises the database constraints — the duplicate-SKU test passes on the

@@ -425,3 +425,187 @@ described the Identity setup.
 
 - Seeding is not environment-gated; it runs in any environment.
 - Tenant isolation remains unenforced — the seeded company's id is not used to scope queries.
+
+---
+
+## 2026-07-18 — Login / logout UI
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now build the login/logout UI in InventoryErp.Web using the ASP.NET Identity setup and seeded user
+> from the previous steps.
+>
+> Add:
+> - A simple Login Razor view (email + password) with a LoginController or AccountController handling
+>   POST, using SignInManager for cookie sign-in
+> - A Logout action (POST, not GET, to avoid CSRF issues)
+> - [Authorize] on all existing controllers by default, with Login as the only anonymous-accessible page
+> - Basic validation and error message if login fails (wrong credentials)
+>
+> Keep this minimal — no registration page, no password reset, no full user management. Just
+> login/logout against the seeded user, matching Core scope.
+>
+> Then:
+> - Update ui-flow.md with the Login screen under Key Screens, noting states
+> - Update acceptance-criteria.md — check off "A user can log in with seeded credentials" if satisfied
+> - Update ai-prompts/implementation.md with this prompt, what Claude Code did, and accept/change/reject
+>
+> After this, test logging in and out manually with the seeded credentials before committing.
+
+### What Claude Code did
+
+- Added `AccountController` (login GET/POST, logout POST, access-denied) and
+  `Views/Account/Login.cshtml` + `AccessDenied.cshtml`, with a `LoginViewModel`.
+- **Removed the scaffolded Identity default UI** — `AddDefaultUI()`, `AddRazorPages()`,
+  `MapRazorPages()` and the `Microsoft.AspNetCore.Identity.UI` package. It was serving Register,
+  forgot-password and account-management pages, which contradicts "no registration page, no password
+  reset". `/Identity/Account/*` no longer exists.
+- Applied a **global fallback authorization policy** rather than per-controller `[Authorize]`.
+- Configured the application cookie to point at the new routes, with an 8-hour sliding expiry.
+- Rewrote `_LoginPartial` to use the new routes and a POST logout form.
+- Enabled lockout: 5 failed attempts, 15 minutes.
+
+### Verification (manual, in a browser)
+
+| Check | Result |
+| --- | --- |
+| `/Products` signed out | 302 → `/Account/Login?ReturnUrl=%2FProducts` |
+| `/`, `/Home/Privacy` signed out | Both 302 to login |
+| `/Identity/Account/Register` | No longer reachable |
+| Login, wrong password | *"Invalid email or password."* in an alert; no crash |
+| Login, seeded credentials | Success, redirected back to `/Products` |
+| Logout | Session ended, redirected to login; `/Products` redirected again |
+| Empty form state | No stray empty alert box |
+
+### Accepted
+
+- **A global fallback policy instead of per-controller `[Authorize]`.** The prompt asked for
+  `[Authorize]` on all existing controllers; a fallback policy achieves that and also protects
+  controllers added later. Forgetting an attribute silently exposes an endpoint; forgetting to opt
+  out merely blocks one, which fails safe.
+- **Identical error message for unknown account, wrong password, and inactive account.** Distinct
+  messages would let an anonymous caller enumerate valid email addresses.
+- **`Url.IsLocalUrl` check on `ReturnUrl`** to prevent an open redirect off-site after sign-in.
+- **POST-only logout with an antiforgery token**, as requested.
+
+### Changed beyond the request
+
+- **Removed the Identity default UI and its package.** Implied by "no registration page, no password
+  reset" — leaving it registered would have kept `/Identity/Account/Register` live.
+- **`/Home/Error` marked `[AllowAnonymous]`.** The prompt said Login should be the only anonymous
+  page, but an unhandled error for a signed-out user would otherwise redirect to login and hide the
+  failure. `AccessDenied` is likewise anonymous.
+- **Added an `IsActive` check.** `ApplicationUser.IsActive` existed but was never enforced, so a
+  deactivated account could still sign in.
+- **Added lockout settings.** `lockoutOnFailure: true` without configured thresholds relies on
+  defaults; making them explicit documents the intent.
+
+### Rejected
+
+- No registration, password reset, email confirmation, profile or user-management pages — all
+  explicitly out of scope.
+
+### Open items after this step
+
+- No role-based authorization on any controller; `Admin` is assigned but unused.
+- No "remember me" duration distinct from the standard cookie expiry.
+- Lockout is enabled but there is no admin path to unlock an account, since user management is out
+  of scope.
+
+---
+
+## 2026-07-18 — UI design system
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Have you seen the design of login screen? This login screen should have a proper design. Even
+> every screen should have a proper design. Just create a plan with responsive & interactive design.
+
+Supplied with a screenshot of the login page rendering entirely unstyled.
+
+### What Claude Code did
+
+**Diagnosed a bug before planning any design.** The screenshot showed serif headings and bulleted
+navigation despite correct Bootstrap classes in the HTML. Investigation found that
+`MapStaticAssets()` registers endpoints with no authorization metadata, so the global
+`FallbackPolicy` added in the previous step applied to them — every unauthenticated CSS and JS
+request was 302-redirected to the login page. Confirmed with `curl` before touching anything (302),
+then fixed with `MapStaticAssets().AllowAnonymous()` and re-confirmed (200 `text/css`).
+
+Then, after confirming four design decisions with the user (Bootstrap + token layer; sidebar shell;
+dark mode; all screens):
+
+- `wwwroot/css/theme.css` — design tokens overriding Bootstrap's own CSS variables for both colour
+  schemes, plus component styles.
+- Two layouts: `_Layout` (sidebar app shell) and `_AuthLayout` (centred card for signed-out pages).
+- Partials: `_Sidebar`, `_TopBar`, `_Alerts`, `_EmptyState`, `_IconSprite`; `_LoginPartial` reworked
+  into a user dropdown.
+- `wwwroot/js/site.js` (previously empty) — theme toggle, drawer, table filter, password reveal,
+  submit busy state, delete modal, flash auto-dismiss.
+- All nine views restyled; `Home/Index` became a dashboard fed by the existing `IProductService`.
+- `ProductsController` gained `TempData` flash messages — the only server-side change.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Static assets signed out | 302 before fix → **200** with correct content types after |
+| Console / network | No errors, no 404s |
+| Screenshots at 375 / 768 / 1280 | Login, dashboard, products, create, details all render correctly |
+| Horizontal scroll at 375px | None — `window.scrollX` max is 0 |
+| Dark mode | Toggles, persists across navigation, no flash on first paint |
+| Mobile drawer | Opens, backdrop shows, closes on Escape, body scroll restored |
+| Create → flash → list | Product created, success alert shown, count 8 → 9 |
+| Duplicate SKU | Still renders as a form error, not an exception |
+| Delete modal | Names the product, deletes, flashes, count back to 8 |
+| Logout | Returns to login |
+| `dotnet build` / `dotnet test` | Clean, 0 warnings; 14/14 passing |
+
+### Accepted
+
+- **Verifying the 302 before applying the fix**, as the plan required. Had the asset already
+  returned 200, the diagnosis would have been wrong and a speculative fix would have masked the real
+  cause.
+- **Overriding Bootstrap's own CSS variables** rather than writing per-component overrides, so
+  built-in components inherit the theme automatically in both schemes.
+- **Splitting `_AuthLayout` from `_Layout`.** The login page previously rendered the full app nav,
+  every link of which redirected straight back to login.
+- **Inline SVG sprite** over an external `.svg` (cross-document `<use>` support is inconsistent) and
+  over an icon font (no external host).
+- **Marking `CompanyId` as visibly provisional** with an amber border and an explanatory hint,
+  rather than styling it to look finished.
+
+### Changed beyond the request
+
+- **Fixed the static-asset bug.** Not requested — the prompt asked for a design plan — but no design
+  work could have been verified without it.
+- **Stripped `_Layout.cshtml.css`** of its hardcoded template colours and `position: absolute`
+  footer, which fought the token layer and broke in dark mode.
+- **Added `TempData` flash messages** to `ProductsController`. Create, edit and delete previously
+  redirected with no feedback at all.
+
+### Rejected
+
+- No Tailwind, no Node build step, no CDN — the vendored Bootstrap 5.3.3 already supports
+  `data-bs-theme` and full variable theming.
+- No Customers or Quotations placeholder screens, and no sidebar links to them: those controllers do
+  not exist, and a nav link to a 404 is worse than no link.
+
+### Lesson recorded
+
+Earlier verification used `get_page_text`, which confirmed routes and content but never assets or
+rendering — which is exactly why a completely unstyled application passed as working. Documented in
+`debugging-notes.md` items 8 and 9, the second being a **false positive**: `scrollWidth` suggested
+horizontal overflow at 375px, but `window.scrollX` proved the page could not actually scroll, the
+table scrolling inside its own container as designed.
+
+### Open items after this step
+
+- Product filtering is client-side over all rows; no server-side pagination or sorting.
+- No column sorting on the products table.
+- Dashboard aggregates products only.
+- Tenant isolation is unchanged and still unenforced.

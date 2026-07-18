@@ -1,0 +1,22 @@
+@model string
+
+<header class="app-topbar">
+    <button type="button" class="btn btn-icon btn-outline-secondary d-lg-none"
+            data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="false"
+            aria-label="Open navigation">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu" /></svg>
+    </button>
+
+    <h1 class="app-topbar__title">@Model</h1>
+
+    <div class="ms-auto d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-icon btn-outline-secondary"
+                data-theme-toggle aria-pressed="false" aria-label="Toggle dark mode"
+                title="Toggle dark mode">
+            <svg class="icon" data-theme-icon-light aria-hidden="true"><use href="#i-moon" /></svg>
+            <svg class="icon d-none" data-theme-icon-dark aria-hidden="true"><use href="#i-sun" /></svg>
+        </button>
+
+        <partial name="_LoginPartial" />
+    </div>
+</header>

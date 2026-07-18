@@ -1,0 +1,19 @@
+@model InventoryErp.Web.Models.EmptyStateViewModel
+
+<div class="empty-state">
+    <div class="empty-state__icon">
+        <svg class="icon icon-lg" aria-hidden="true"><use href="@("#" + Model.Icon)" /></svg>
+    </div>
+    <p class="empty-state__title">@Model.Title</p>
+    <p class="empty-state__text">@Model.Message</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ActionText) && !string.IsNullOrWhiteSpace(Model.ActionAction))
+    {
+        <a class="btn btn-primary"
+           asp-controller="@Model.ActionController"
+           asp-action="@Model.ActionAction">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
+            @Model.ActionText
+        </a>
+    }
+</div>

@@ -1,0 +1,16 @@
+@{
+    ViewData["Title"] = "Access denied";
+    Layout = "_AuthLayout";
+}
+
+<div class="text-center">
+    <div class="empty-state__icon mb-3">
+        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-lock" /></svg>
+    </div>
+    <h1 class="auth__title">Access denied</h1>
+    <p class="auth__subtitle mb-4">You do not have permission to view this page.</p>
+    <a class="btn btn-primary w-100" asp-controller="Home" asp-action="Index">
+        <svg class="icon" aria-hidden="true"><use href="#i-arrow-left" /></svg>
+        Back to dashboard
+    </a>
+</div>

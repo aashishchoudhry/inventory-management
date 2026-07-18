@@ -1,0 +1,63 @@
+@using InventoryErp.Web.Models
+@model LoginViewModel
+@{
+    ViewData["Title"] = "Log in";
+    Layout = "_AuthLayout";
+}
+
+<h1 class="auth__title">Welcome back</h1>
+<p class="auth__subtitle">Sign in to continue to InventoryErp.</p>
+
+<form asp-action="Login" method="post" data-busy-submit>
+    <input type="hidden" asp-for="ReturnUrl" />
+
+    @* Rendered conditionally rather than via asp-validation-summary, which would leave an
+       empty red alert box on first load. *@
+    @if (ViewData.ModelState[string.Empty]?.Errors.Count > 0)
+    {
+        <div class="alert alert-danger d-flex align-items-start gap-2" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+            <div>
+                @foreach (var error in ViewData.ModelState[string.Empty]!.Errors)
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" autocomplete="username"
+               placeholder="you@example.com" autofocus />
+        <span asp-validation-for="Email" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Password" class="form-label"></label>
+        <div class="input-reveal">
+            <input asp-for="Password" class="form-control" autocomplete="current-password"
+                   placeholder="Enter your password" id="password-input" />
+            <button type="button" class="input-reveal__btn"
+                    data-reveal-target="#password-input" aria-label="Show password">
+                <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye" /></svg>
+                <svg class="icon icon-sm d-none" aria-hidden="true"><use href="#i-eye-off" /></svg>
+            </button>
+        </div>
+        <span asp-validation-for="Password" class="text-danger small"></span>
+    </div>
+
+    <div class="form-check mb-4">
+        <input asp-for="RememberMe" class="form-check-input" />
+        <label asp-for="RememberMe" class="form-check-label"></label>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">
+        <svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg>
+        Log in
+    </button>
+</form>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

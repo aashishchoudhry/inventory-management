@@ -1,40 +1,129 @@
 @using InventoryErp.Application.DTOs.Products
+@using InventoryErp.Domain.Enums
 @model ProductDto
 @{
     ViewData["Title"] = Model.Name;
 }
 
-<h1>@Model.Name</h1>
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">@Model.Name</h2>
+        <p class="page-header__subtitle"><code>@Model.Sku</code></p>
+    </div>
+    <div class="action-bar">
+        <a class="btn btn-outline-secondary" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left" /></svg>
+            Back
+        </a>
+        <a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.Id">
+            <svg class="icon" aria-hidden="true"><use href="#i-edit" /></svg>
+            Edit
+        </a>
+    </div>
+</div>
 
-<dl class="row">
-    <dt class="col-sm-3">SKU</dt>
-    <dd class="col-sm-9">@Model.Sku</dd>
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header">Details</div>
+            <div class="card-body">
+                <dl class="row definition-grid mb-0">
+                    <div class="col-12 col-sm-6">
+                        <dt>Status</dt>
+                        <dd>
+                            @if (Model.Status == ProductStatus.Active)
+                            {
+                                <span class="badge-pill badge-pill--ok">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge-pill badge-pill--muted">Discontinued</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <dt>Barcode</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(Model.Barcode) ? "—" : Model.Barcode)</dd>
+                    </div>
+                    <div class="col-12">
+                        <dt>Description</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(Model.Description) ? "—" : Model.Description)</dd>
+                    </div>
+                    <div class="col-6 col-sm-4">
+                        <dt>Selling price</dt>
+                        <dd>@Model.SellingPrice.ToString("N2")</dd>
+                    </div>
+                    <div class="col-6 col-sm-4">
+                        <dt>GST</dt>
+                        <dd>@Model.GstPercent.ToString("0.##")%</dd>
+                    </div>
+                    <div class="col-6 col-sm-4">
+                        <dt>Price incl. GST</dt>
+                        <dd>@((Model.SellingPrice * (1 + Model.GstPercent / 100)).ToString("N2"))</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
 
-    <dt class="col-sm-3">Barcode</dt>
-    <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.Barcode) ? "—" : Model.Barcode)</dd>
+    <div class="col-12 col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">Stock</div>
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <p class="stat-tile__label">On hand</p>
+                        <div class="stat-tile__value">@Model.CurrentStock</div>
+                    </div>
+                    @if (Model.IsBelowReorderLevel)
+                    {
+                        <span class="badge-pill badge-pill--warn">Reorder</span>
+                    }
+                </div>
+                <p class="form-hint mb-0">Reorder level: @Model.ReorderLevel</p>
+            </div>
+        </div>
 
-    <dt class="col-sm-3">Description</dt>
-    <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.Description) ? "—" : Model.Description)</dd>
+        <div class="card">
+            <div class="card-header">Danger zone</div>
+            <div class="card-body">
+                <p class="form-hint">
+                    Deleting removes this product from listings. The record is retained for audit.
+                </p>
+                <button type="button" class="btn btn-outline-danger w-100"
+                        data-confirm-delete
+                        data-item-name="@Model.Name"
+                        data-action="@Url.Action("Delete", "Products", new { id = Model.Id })">
+                    <svg class="icon" aria-hidden="true"><use href="#i-trash" /></svg>
+                    Delete product
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <dt class="col-sm-3">Selling price</dt>
-    <dd class="col-sm-9">@Model.SellingPrice.ToString("N2")</dd>
-
-    <dt class="col-sm-3">GST %</dt>
-    <dd class="col-sm-9">@Model.GstPercent.ToString("N2")</dd>
-
-    <dt class="col-sm-3">Current stock</dt>
-    <dd class="col-sm-9">@Model.CurrentStock</dd>
-
-    <dt class="col-sm-3">Reorder level</dt>
-    <dd class="col-sm-9">@Model.ReorderLevel</dd>
-
-    <dt class="col-sm-3">Status</dt>
-    <dd class="col-sm-9">@Model.Status</dd>
-</dl>
-
-<a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.Id">Edit</a>
-<a class="btn btn-link" asp-action="Index">Back to list</a>
-
-<form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
-    <button type="submit" class="btn btn-outline-danger">Delete</button>
-</form>
+@* Confirmation replaces the previous immediate POST on click. *@
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmDeleteLabel">Delete product?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">
+                    This will remove <strong data-confirm-name>this item</strong> from your product list.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <svg class="icon" aria-hidden="true"><use href="#i-trash" /></svg>
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

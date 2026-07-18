@@ -1,0 +1,40 @@
+@{
+    // Active state is derived from the route rather than hardcoded per view, so a page added
+    // later highlights correctly without touching this file.
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+
+    string NavClass(string target) =>
+        string.Equals(controller, target, StringComparison.OrdinalIgnoreCase)
+            ? "app-nav-link is-active"
+            : "app-nav-link";
+
+    string? NavCurrent(string target) =>
+        string.Equals(controller, target, StringComparison.OrdinalIgnoreCase) ? "page" : null;
+}
+
+<aside class="app-sidebar" data-sidebar id="app-sidebar" aria-label="Main navigation">
+    <a class="app-sidebar__brand" asp-controller="Home" asp-action="Index">
+        <span class="app-sidebar__mark" aria-hidden="true">IE</span>
+        <span>InventoryErp</span>
+    </a>
+
+    <nav class="app-sidebar__nav">
+        <p class="app-sidebar__heading">Overview</p>
+        <a class="@NavClass("Home")" aria-current="@NavCurrent("Home")"
+           asp-controller="Home" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-dashboard" /></svg>
+            <span>Dashboard</span>
+        </a>
+
+        <p class="app-sidebar__heading">Inventory</p>
+        <a class="@NavClass("Products")" aria-current="@NavCurrent("Products")"
+           asp-controller="Products" asp-action="Index">
+            <svg class="icon" aria-hidden="true"><use href="#i-box" /></svg>
+            <span>Products</span>
+        </a>
+    </nav>
+
+    @* Customers, Quotations and Company are intentionally absent: no controllers exist for
+       them yet, and a nav link to a 404 is worse than no link. *@
+    <div class="app-sidebar__footer">Core scope</div>
+</aside>

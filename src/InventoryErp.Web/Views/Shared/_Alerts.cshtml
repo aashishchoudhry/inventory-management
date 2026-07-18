@@ -1,0 +1,36 @@
+@{
+    var success = TempData["Success"] as string;
+    var error = TempData["Error"] as string;
+    var info = TempData["Info"] as string;
+}
+
+@* aria-live so a screen reader announces the flash without the user having to find it. *@
+<div aria-live="polite" aria-atomic="true">
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2"
+             role="alert" data-auto-dismiss="6000">
+            <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
+            <div>@success</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        @* No auto-dismiss on errors: the user should decide when to clear a failure. *@
+        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+            <div>@error</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(info))
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert" data-auto-dismiss="6000">
+            @info
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+        </div>
+    }
+</div>

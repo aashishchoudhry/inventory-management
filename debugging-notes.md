@@ -118,6 +118,56 @@ sqlcmd -S "." -I -Q "SELECT name FROM sys.databases WHERE name='InventoryErp';"
 
 ---
 
+## 8. Every page rendered completely unstyled
+
+**When:** Immediately after the login step added a global authorization fallback policy.
+
+**Symptom:** Serif headings, bulleted navigation, raw browser form controls — despite correct
+Bootstrap classes being present in the served HTML, and `bootstrap.min.css` existing on disk at
+232 KB.
+
+**Cause:** `MapStaticAssets()` registers endpoints that carry **no authorization metadata**, so the
+global `FallbackPolicy` applied to them. Every unauthenticated request for CSS or JS was
+302-redirected to `/Account/Login`, and the browser received an HTML login page where it expected a
+stylesheet. Confirmed before fixing:
+
+```
+/lib/bootstrap/dist/css/bootstrap.min.css   302
+/css/site.css                              302
+/js/site.js                                302
+```
+
+**Fix:** `app.MapStaticAssets().AllowAnonymous();` — after which all return `200 text/css` /
+`200 text/javascript`.
+
+**Lesson, and the more important one:** this shipped unnoticed because verification had checked page
+*text* via `get_page_text` and never looked at assets or a rendered screenshot. Text-based checks
+confirm a route works and content is correct; they say nothing about whether the page is usable. Any
+change touching middleware order or authorization now warrants an asset-status check and a
+screenshot.
+
+---
+
+## 9. False positive: horizontal overflow at 375px
+
+**When:** Verifying mobile responsiveness of the products table.
+
+**Symptom:** `document.documentElement.scrollWidth` reported 555px against a 375px viewport,
+suggesting the page scrolled sideways.
+
+**Cause:** Not a bug. `scrollWidth` counts descendants that overflow inside a clipping container —
+the table sits in `.table-responsive` with `overflow-x: auto`, which scrolls internally. The
+authoritative check is whether the window can actually scroll:
+
+```js
+window.scrollTo(9999, 0); window.scrollX  // → 0, so no horizontal scroll
+```
+
+**Lesson:** measure the behaviour a user would experience, not a property that merely correlates
+with it.
+
+---
+
 ## Open issues, not yet bugs
 
 Recorded here because they will become bugs when the relevant feature is built:

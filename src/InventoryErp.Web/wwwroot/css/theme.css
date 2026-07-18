@@ -1,0 +1,624 @@
+/*
+ * Design tokens.
+ * Loaded after Bootstrap so these override its variables; every built-in component
+ * inherits the theme rather than needing per-component rules.
+ */
+
+:root,
+[data-bs-theme="light"] {
+  /* Brand — indigo. -rgb companions are required by Bootstrap's rgba() utilities. */
+  --bs-primary: #4f46e5;
+  --bs-primary-rgb: 79, 70, 229;
+  --bs-primary-text-emphasis: #3730a3;
+  --bs-primary-bg-subtle: #eef2ff;
+  --bs-primary-border-subtle: #c7d2fe;
+
+  --bs-link-color: #4f46e5;
+  --bs-link-color-rgb: 79, 70, 229;
+  --bs-link-hover-color: #4338ca;
+
+  --bs-body-bg: #f6f7f9;
+  --bs-body-color: #1f2933;
+  --bs-secondary-color: #52606d;
+  --bs-border-color: #e3e6ea;
+
+  /* Semantic surfaces */
+  --app-surface: #ffffff;
+  --app-surface-alt: #f9fafb;
+  --app-sidebar-bg: #1e1b3a;
+  --app-sidebar-fg: #c7c9d9;
+  --app-sidebar-fg-active: #ffffff;
+  --app-sidebar-active-bg: rgba(255, 255, 255, 0.1);
+  --app-topbar-bg: rgba(255, 255, 255, 0.85);
+  --app-muted: #6b7280;
+
+  --app-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --app-shadow: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --app-shadow-lg: 0 10px 24px rgba(16, 24, 40, 0.1);
+}
+
+[data-bs-theme="dark"] {
+  --bs-primary: #818cf8;
+  --bs-primary-rgb: 129, 140, 248;
+  --bs-primary-text-emphasis: #c7d2fe;
+  --bs-primary-bg-subtle: #1e1b4b;
+  --bs-primary-border-subtle: #3730a3;
+
+  --bs-link-color: #a5b4fc;
+  --bs-link-color-rgb: 165, 180, 252;
+  --bs-link-hover-color: #c7d2fe;
+
+  --bs-body-bg: #0f1117;
+  --bs-body-color: #e5e7eb;
+  /* Lightened from the light-mode value to hold 4.5:1 on the dark surface. */
+  --bs-secondary-color: #9aa4b2;
+  --bs-border-color: #262b36;
+
+  --app-surface: #171a21;
+  --app-surface-alt: #1c2029;
+  --app-sidebar-bg: #12141a;
+  --app-sidebar-fg: #9aa4b2;
+  --app-sidebar-fg-active: #ffffff;
+  --app-sidebar-active-bg: rgba(255, 255, 255, 0.08);
+  --app-topbar-bg: rgba(23, 26, 33, 0.85);
+  --app-muted: #9aa4b2;
+
+  --app-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --app-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+
+:root {
+  --app-sidebar-width: 260px;
+  --app-topbar-height: 60px;
+
+  --bs-border-radius: 0.5rem;
+  --bs-border-radius-sm: 0.375rem;
+  --bs-border-radius-lg: 0.75rem;
+
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif;
+  --bs-body-font-size: 0.9375rem;
+  --bs-body-line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------- base */
+
+body {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* A single visible focus style everywhere, replacing the template's white-ringed override. */
+:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+  border-radius: var(--bs-border-radius-sm);
+}
+
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.3);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--app-sidebar-width);
+  background-color: var(--app-sidebar-bg);
+  color: var(--app-sidebar-fg);
+  display: flex;
+  flex-direction: column;
+  z-index: 1045;
+  transition: transform 0.25s ease;
+}
+
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  height: var(--app-topbar-height);
+  padding-inline: 1.25rem;
+  color: #fff;
+  font-weight: 650;
+  font-size: 1.0625rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.app-sidebar__brand:hover { color: #fff; }
+
+.app-sidebar__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav {
+  padding: 0.75rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.app-sidebar__heading {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.75rem 0.75rem 0.375rem;
+  margin: 0;
+}
+
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.125rem;
+  border-radius: var(--bs-border-radius);
+  color: var(--app-sidebar-fg);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.app-nav-link:hover {
+  background-color: var(--app-sidebar-active-bg);
+  color: var(--app-sidebar-fg-active);
+}
+
+.app-nav-link.is-active {
+  background-color: var(--bs-primary);
+  color: #fff;
+}
+
+.app-nav-link .icon { flex-shrink: 0; }
+
+.app-sidebar__footer {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0; /* lets descendants shrink instead of forcing page-level overflow */
+  margin-inline-start: var(--app-sidebar-width);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  height: var(--app-topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-inline: 1.25rem;
+  background-color: var(--app-topbar-bg);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.app-topbar__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-content {
+  flex: 1;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.app-sidebar__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+/* ---------------------------------------------------- mobile: drawer */
+
+@media (max-width: 991.98px) {
+  .app-sidebar { transform: translateX(-100%); }
+  .app-sidebar.is-open { transform: translateX(0); }
+  .app-main { margin-inline-start: 0; }
+  .app-sidebar__backdrop.is-visible { opacity: 1; visibility: visible; }
+  .app-content { padding: 1rem 0.875rem 2.5rem; }
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.card {
+  --bs-card-bg: var(--app-surface);
+  --bs-card-border-color: var(--bs-border-color);
+  --bs-card-cap-bg: transparent;
+  box-shadow: var(--app-shadow-sm);
+}
+
+.card-header {
+  border-bottom-color: var(--bs-border-color);
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ stat tile */
+
+.stat-tile { height: 100%; }
+
+.stat-tile__label {
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+}
+
+.stat-tile__value {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.stat-tile__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--bs-border-radius);
+  background-color: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary-text-emphasis);
+  flex-shrink: 0;
+}
+
+.stat-tile__icon--warn {
+  background-color: var(--bs-warning-bg-subtle);
+  color: var(--bs-warning-text-emphasis);
+}
+
+.stat-tile__icon--ok {
+  background-color: var(--bs-success-bg-subtle);
+  color: var(--bs-success-text-emphasis);
+}
+
+/* --------------------------------------------------------------- tables */
+
+.table {
+  --bs-table-bg: transparent;
+  margin-bottom: 0;
+}
+
+.table > thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--app-muted);
+  font-weight: 600;
+  border-bottom-color: var(--bs-border-color);
+  white-space: nowrap;
+  background-color: var(--app-surface-alt);
+}
+
+.table > tbody td {
+  border-bottom-color: var(--bs-border-color);
+  vertical-align: middle;
+}
+
+.table-hover > tbody > tr:hover > * {
+  --bs-table-accent-bg: var(--app-surface-alt);
+  background-color: var(--app-surface-alt);
+}
+
+.cell-numeric {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- badges */
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.badge-pill--ok {
+  background-color: var(--bs-success-bg-subtle);
+  color: var(--bs-success-text-emphasis);
+}
+
+.badge-pill--warn {
+  background-color: var(--bs-warning-bg-subtle);
+  color: var(--bs-warning-text-emphasis);
+}
+
+.badge-pill--muted {
+  background-color: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+}
+
+.badge-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------------------------------------------------------------- forms */
+
+.form-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.375rem;
+}
+
+.form-control, .form-select {
+  background-color: var(--app-surface);
+  border-color: var(--bs-border-color);
+  padding: 0.5rem 0.75rem;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--bs-primary);
+  background-color: var(--app-surface);
+}
+
+.form-hint {
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+  margin-top: 0.25rem;
+}
+
+.form-section + .form-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.form-section__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.form-section__hint {
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+  margin-bottom: 1rem;
+}
+
+/* Marks a control that is a known placeholder rather than finished UI. */
+.field-provisional {
+  border-inline-start: 3px solid var(--bs-warning);
+  padding-inline-start: 0.75rem;
+}
+
+/* ------------------------------------------------------------- buttons */
+
+.btn {
+  --bs-btn-padding-y: 0.5rem;
+  --bs-btn-padding-x: 0.875rem;
+  --bs-btn-font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4375rem;
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-bg: var(--bs-link-hover-color);
+  --bs-btn-hover-border-color: var(--bs-link-hover-color);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+}
+
+.btn-icon {
+  --bs-btn-padding-x: 0.5rem;
+  line-height: 1;
+}
+
+.btn .spinner-border { width: 0.875rem; height: 0.875rem; border-width: 0.15em; }
+
+/* ---------------------------------------------------------- auth layout */
+
+.auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+  background:
+    radial-gradient(1000px 500px at 50% -20%, rgba(var(--bs-primary-rgb), 0.14), transparent 70%),
+    var(--bs-body-bg);
+}
+
+.auth__panel { width: 100%; max-width: 25rem; }
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--bs-body-color);
+  text-decoration: none;
+}
+
+.auth__card {
+  background-color: var(--app-surface);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  box-shadow: var(--app-shadow-lg);
+  padding: 1.75rem;
+}
+
+.auth__title { font-size: 1.25rem; margin-bottom: 0.25rem; }
+
+.auth__subtitle {
+  font-size: 0.875rem;
+  color: var(--app-muted);
+  margin-bottom: 1.5rem;
+}
+
+.auth__footer {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+  margin-top: 1.25rem;
+}
+
+/* Password reveal button sits inside the input. */
+.input-reveal { position: relative; }
+
+.input-reveal .form-control { padding-inline-end: 2.75rem; }
+
+.input-reveal__btn {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 2.75rem;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--app-muted);
+  border-radius: 0 var(--bs-border-radius) var(--bs-border-radius) 0;
+}
+
+.input-reveal__btn:hover { color: var(--bs-body-color); }
+
+/* ---------------------------------------------------------- empty state */
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  background-color: var(--bs-secondary-bg);
+  color: var(--app-muted);
+}
+
+.empty-state__title { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+
+.empty-state__text {
+  color: var(--app-muted);
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ------------------------------------------------------------ utilities */
+
+.icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-sm { width: 1rem; height: 1rem; }
+.icon-lg { width: 1.5rem; height: 1.5rem; }
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.page-header__title { font-size: 1.375rem; margin: 0; }
+
+.page-header__subtitle {
+  color: var(--app-muted);
+  font-size: 0.875rem;
+  margin: 0.125rem 0 0;
+}
+
+.text-muted-app { color: var(--app-muted) !important; }
+
+.definition-grid dt {
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+  font-weight: 500;
+  margin-bottom: 0.125rem;
+}
+
+.definition-grid dd { margin-bottom: 1rem; }
+
+/* Touch targets on small screens. */
+@media (max-width: 767.98px) {
+  .btn { min-height: 44px; }
+  .app-nav-link { min-height: 44px; }
+  .action-bar .btn { width: 100%; }
+}
+
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}

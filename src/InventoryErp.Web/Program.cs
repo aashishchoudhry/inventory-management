@@ -5,6 +5,7 @@ using InventoryErp.Infrastructure.Identity;
 using InventoryErp.Infrastructure.Persistence;
 using InventoryErp.Infrastructure.Persistence.Seeding;
 using InventoryErp.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,13 +22,34 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         options.Password.RequiredLength = 8;
         options.User.RequireUniqueEmail = true;
         options.SignIn.RequireConfirmedAccount = false;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddEntityFrameworkStores<InventoryErpDbContext>()
-    .AddDefaultTokenProviders()
-    .AddDefaultUI();
+    .AddDefaultTokenProviders();
+
+// The default Identity UI is deliberately not registered: it would expose Register, forgot-password
+// and account-management pages, which are out of scope. AccountController serves login/logout only.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+});
+
+// Everything requires an authenticated user unless it opts out with [AllowAnonymous].
+// A fallback policy is safer than per-controller [Authorize]: a new controller is protected by
+// default rather than protected only if someone remembers the attribute.
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddControllersWithViews();
-builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
@@ -56,13 +78,14 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// AllowAnonymous is required: static asset endpoints carry no authorization metadata, so the
+// global FallbackPolicy would otherwise apply to them and redirect every CSS/JS request to the
+// login page — serving HTML where the browser expects a stylesheet.
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
-
-app.MapRazorPages();
 
 app.Run();

@@ -4,69 +4,130 @@
     ViewData["Title"] = "New product";
 }
 
-<h1>New product</h1>
-
-<div class="row">
-    <div class="col-md-6">
-        <form asp-action="Create">
-            <div asp-validation-summary="All" class="text-danger mb-3"></div>
-
-            @* TODO: replace with a company picker once tenant context exists. *@
-            <div class="mb-3">
-                <label asp-for="CompanyId" class="form-label"></label>
-                <input asp-for="CompanyId" class="form-control" />
-                <span asp-validation-for="CompanyId" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Name" class="form-label"></label>
-                <input asp-for="Name" class="form-control" />
-                <span asp-validation-for="Name" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Sku" class="form-label"></label>
-                <input asp-for="Sku" class="form-control" />
-                <span asp-validation-for="Sku" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Barcode" class="form-label"></label>
-                <input asp-for="Barcode" class="form-control" />
-                <span asp-validation-for="Barcode" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Description" class="form-label"></label>
-                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
-                <span asp-validation-for="Description" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="SellingPrice" class="form-label"></label>
-                <input asp-for="SellingPrice" class="form-control" />
-                <span asp-validation-for="SellingPrice" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="GstPercent" class="form-label"></label>
-                <input asp-for="GstPercent" class="form-control" />
-                <span asp-validation-for="GstPercent" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="CurrentStock" class="form-label"></label>
-                <input asp-for="CurrentStock" class="form-control" />
-                <span asp-validation-for="CurrentStock" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="ReorderLevel" class="form-label"></label>
-                <input asp-for="ReorderLevel" class="form-control" />
-                <span asp-validation-for="ReorderLevel" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Status" class="form-label"></label>
-                <select asp-for="Status" asp-items="Html.GetEnumSelectList<InventoryErp.Domain.Enums.ProductStatus>()" class="form-select"></select>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Create</button>
-            <a class="btn btn-link" asp-action="Index">Cancel</a>
-        </form>
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">New product</h2>
+        <p class="page-header__subtitle">Add an item to the catalogue</p>
     </div>
+    <a class="btn btn-outline-secondary" asp-action="Index">
+        <svg class="icon" aria-hidden="true"><use href="#i-arrow-left" /></svg>
+        Back to products
+    </a>
 </div>
+
+<form asp-action="Create" method="post" data-busy-submit>
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="card">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="form-section">
+                        <p class="form-section__title">Identification</p>
+                        <p class="form-section__hint">SKU must be unique within the company.</p>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="Name" class="form-label"></label>
+                                <input asp-for="Name" class="form-control" placeholder="e.g. Hex Bolt M10 x 50mm" />
+                                <span asp-validation-for="Name" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label asp-for="Sku" class="form-label"></label>
+                                <input asp-for="Sku" class="form-control" placeholder="e.g. FST-HB-M10-50" />
+                                <span asp-validation-for="Sku" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label asp-for="Barcode" class="form-label"></label>
+                                <input asp-for="Barcode" class="form-control" placeholder="Optional" />
+                                <span asp-validation-for="Barcode" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Description" class="form-label"></label>
+                                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                                <span asp-validation-for="Description" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <p class="form-section__title">Pricing</p>
+                        <p class="form-section__hint">GST is a percentage — enter 18 for 18%.</p>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label asp-for="SellingPrice" class="form-label"></label>
+                                <input asp-for="SellingPrice" class="form-control" />
+                                <span asp-validation-for="SellingPrice" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label asp-for="GstPercent" class="form-label"></label>
+                                <input asp-for="GstPercent" class="form-control" />
+                                <span asp-validation-for="GstPercent" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <p class="form-section__title">Stock</p>
+                        <p class="form-section__hint">
+                            A product is flagged for reorder when stock is at or below the reorder level.
+                        </p>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label asp-for="CurrentStock" class="form-label"></label>
+                                <input asp-for="CurrentStock" class="form-control" />
+                                <span asp-validation-for="CurrentStock" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label asp-for="ReorderLevel" class="form-label"></label>
+                                <input asp-for="ReorderLevel" class="form-control" />
+                                <span asp-validation-for="ReorderLevel" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="card mb-3">
+                <div class="card-header">Settings</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="Status" class="form-label"></label>
+                        <select asp-for="Status"
+                                asp-items="Html.GetEnumSelectList<InventoryErp.Domain.Enums.ProductStatus>()"
+                                class="form-select"></select>
+                    </div>
+
+                    @* Provisional: CompanyId should come from tenant context, not user input.
+                       Marked visually so it is not mistaken for finished UI. *@
+                    <div class="field-provisional">
+                        <label asp-for="CompanyId" class="form-label"></label>
+                        <input asp-for="CompanyId" class="form-control" />
+                        <p class="form-hint mb-0">
+                            Temporary field. This will be resolved from the signed-in user's company
+                            once tenant context exists.
+                        </p>
+                        <span asp-validation-for="CompanyId" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body action-bar">
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
+                        Create product
+                    </button>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
 
 @section Scripts {
     @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }

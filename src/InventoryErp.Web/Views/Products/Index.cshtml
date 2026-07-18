@@ -1,54 +1,122 @@
 @using InventoryErp.Application.DTOs.Products
+@using InventoryErp.Domain.Enums
+@using InventoryErp.Web.Models
 @model IReadOnlyList<ProductDto>
 @{
     ViewData["Title"] = "Products";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>Products</h1>
-    <a class="btn btn-primary" asp-action="Create">New product</a>
+<div class="page-header">
+    <div>
+        <h2 class="page-header__title">Products</h2>
+        <p class="page-header__subtitle" data-filter-status>@Model.Count items</p>
+    </div>
+    <a class="btn btn-primary" asp-action="Create">
+        <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
+        New product
+    </a>
 </div>
 
 @if (Model.Count == 0)
 {
-    <p class="text-muted">No products yet.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel {
+            Icon = "i-box",
+            Title = "No products yet",
+            Message = "Add your first product to start tracking stock.",
+            ActionText = "New product",
+            ActionController = "Products",
+            ActionAction = "Create"
+        })" />
+    </div>
 }
 else
 {
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th>SKU</th>
-                <th>Name</th>
-                <th class="text-end">Selling price</th>
-                <th class="text-end">GST %</th>
-                <th class="text-end">Stock</th>
-                <th>Status</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var product in Model)
-            {
-                <tr>
-                    <td>@product.Sku</td>
-                    <td>@product.Name</td>
-                    <td class="text-end">@product.SellingPrice.ToString("N2")</td>
-                    <td class="text-end">@product.GstPercent.ToString("N2")</td>
-                    <td class="text-end">
-                        @product.CurrentStock
-                        @if (product.IsBelowReorderLevel)
-                        {
-                            <span class="badge bg-warning text-dark ms-1">Reorder</span>
-                        }
-                    </td>
-                    <td>@product.Status</td>
-                    <td class="text-end">
-                        <a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@product.Id">Details</a>
-                        <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@product.Id">Edit</a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="card">
+        <div class="card-header">
+            <label class="visually-hidden" for="product-search">Search products</label>
+            <div class="input-reveal" style="max-width: 22rem;">
+                <input type="search" id="product-search" class="form-control"
+                       placeholder="Search by SKU, name or barcode…"
+                       data-table-filter="#products-table" />
+            </div>
+        </div>
+
+        @* table-responsive keeps the horizontal scroll inside the card rather than
+           forcing the whole page to scroll sideways on mobile. *@
+        <div class="table-responsive">
+            <table class="table table-hover" id="products-table">
+                <thead>
+                    <tr>
+                        <th scope="col">SKU</th>
+                        <th scope="col">Name</th>
+                        <th scope="col" class="cell-numeric">Price</th>
+                        <th scope="col" class="cell-numeric">GST</th>
+                        <th scope="col" class="cell-numeric">Stock</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in Model)
+                    {
+                        <tr>
+                            <td><code>@product.Sku</code></td>
+                            <td>
+                                <div>@product.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(product.Barcode))
+                                {
+                                    <div class="small text-muted-app">@product.Barcode</div>
+                                }
+                            </td>
+                            <td class="cell-numeric">@product.SellingPrice.ToString("N2")</td>
+                            <td class="cell-numeric text-muted-app">@product.GstPercent.ToString("0.##")%</td>
+                            <td class="cell-numeric">
+                                @if (product.IsBelowReorderLevel)
+                                {
+                                    <span class="badge-pill badge-pill--warn"
+                                          title="At or below reorder level of @product.ReorderLevel">
+                                        @product.CurrentStock
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>@product.CurrentStock</span>
+                                }
+                            </td>
+                            <td>
+                                @if (product.Status == ProductStatus.Active)
+                                {
+                                    <span class="badge-pill badge-pill--ok">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-pill badge-pill--muted">Discontinued</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1 justify-content-end">
+                                    <a class="btn btn-sm btn-outline-secondary btn-icon"
+                                       asp-action="Details" asp-route-id="@product.Id"
+                                       aria-label="Details for @product.Name" title="Details">
+                                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye-detail" /></svg>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-secondary btn-icon"
+                                       asp-action="Edit" asp-route-id="@product.Id"
+                                       aria-label="Edit @product.Name" title="Edit">
+                                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-edit" /></svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty-state" data-filter-empty hidden>
+            <p class="empty-state__title">No matching products</p>
+            <p class="empty-state__text mb-0">Try a different search term.</p>
+        </div>
+    </div>
 }

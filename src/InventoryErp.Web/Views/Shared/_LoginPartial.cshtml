@@ -3,25 +3,32 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
 
-<ul class="navbar-nav">
 @if (SignInManager.IsSignedIn(User))
 {
-    <li class="nav-item">
-        <a class="nav-link text-dark" asp-area="Identity" asp-page="/Account/Manage/Index">Hello @UserManager.GetUserName(User)!</a>
-    </li>
-    <li class="nav-item">
-        <form class="form-inline" asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home")">
-            <button type="submit" class="nav-link btn btn-link text-dark border-0">Logout</button>
-        </form>
-    </li>
+    var name = UserManager.GetUserName(User);
+
+    <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-user" /></svg>
+            <span class="d-none d-sm-inline">@name</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li class="dropdown-header text-truncate" style="max-width: 16rem;">@name</li>
+            <li><hr class="dropdown-divider" /></li>
+            <li>
+                @* POST, not a link: a GET logout can be triggered by any third-party img or anchor. *@
+                <form asp-controller="Account" asp-action="Logout" method="post">
+                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-logout" /></svg>
+                        Log out
+                    </button>
+                </form>
+            </li>
+        </ul>
+    </div>
 }
 else
 {
-    <li class="nav-item">
-        <a class="nav-link text-dark" asp-area="Identity" asp-page="/Account/Register">Register</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link text-dark" asp-area="Identity" asp-page="/Account/Login">Login</a>
-    </li>
+    <a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="Login">Log in</a>
 }
-</ul>

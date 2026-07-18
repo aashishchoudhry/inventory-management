@@ -7,7 +7,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@pageTitle · InventoryErp</title>
-    @* Runs before first paint so a dark-mode user never sees a flash of light theme. *@
     <script>
         (function () {
             try {
@@ -26,24 +25,22 @@
     <link rel="stylesheet" href="~/InventoryErp.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
+    @* Signed-out shell: no sidebar or app nav, since every link in it would bounce
+       straight back to the login page. *@
     <partial name="_IconSprite" />
 
-    <div class="app">
-        <partial name="_Sidebar" />
-        <div class="app-sidebar__backdrop" data-sidebar-backdrop hidden></div>
+    <div class="auth">
+        <div class="auth__panel">
+            <div class="auth__brand">
+                <span class="app-sidebar__mark" aria-hidden="true">IE</span>
+                <span>InventoryErp</span>
+            </div>
 
-        <div class="app-main">
-            <partial name="_TopBar" model="pageTitle" />
-
-            <main class="app-content" id="main-content">
-                <partial name="_Alerts" />
+            <div class="auth__card">
                 @RenderBody()
-            </main>
+            </div>
 
-            <footer class="app-footer">
-                &copy; @DateTime.UtcNow.Year InventoryErp ·
-                <a asp-controller="Home" asp-action="Privacy">Privacy</a>
-            </footer>
+            <p class="auth__footer">&copy; @DateTime.UtcNow.Year InventoryErp</p>
         </div>
     </div>
 
