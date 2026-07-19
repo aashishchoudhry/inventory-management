@@ -55,6 +55,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddControllersWithViews();
 
+
 var app = builder.Build();
 
 // Apply pending migrations, then seed sample data on first run. The seeder is a no-op once the
