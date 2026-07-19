@@ -50,6 +50,26 @@ Registration is configured with `RequireConfirmedAccount = false`, so no email c
 no mail transport dependency. That is a development convenience and should be revisited before any
 real deployment. Password policy is left at Identity defaults apart from a raised minimum length of 8.
 
+### Dashboard KPI: "quotations expiring soon"
+
+**Definition:** quotations whose `ValidUntil` falls between today and 7 days ahead inclusive,
+measured in UTC. Quotations that never expire (`ValidUntil` null) and those that have already
+lapsed are both excluded.
+
+Not specified by the guide, so the reasoning is recorded here. It was chosen over the alternative
+suggestions — total quotation value this month, or a low-stock count — because it is the only
+candidate that is a **call to action**. Each number is a customer to chase before their quote
+lapses; the other three cards on the dashboard report the state of the business, and a month's
+quotation value tells you what already happened rather than what to do next.
+
+Already-expired quotations are excluded deliberately: nothing can be done about them, so counting
+them would inflate a number whose entire purpose is "here is your to-do list". The 7-day window is
+`DashboardStatsDto.ExpiringWindowDays`, a single constant that both the service and the card label
+read, so widening it changes one line and the UI follows.
+
+The low-stock figure it displaced is not lost — it remains as the "Needs reordering" work list
+below the cards, which is a more useful form for it than a bare count.
+
 ### PDF generation with QuestPDF
 
 Quotation PDFs are rendered by **QuestPDF** in `InventoryErp.Infrastructure/Documents`. The

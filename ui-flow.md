@@ -332,7 +332,7 @@ PNG or JPG image."*, *"The logo must be 2 MB or smaller."*
 
 | Route | View | Notes |
 | --- | --- | --- |
-| `/` | `Home/Index.cshtml` | **Dashboard** — four stat tiles (total products, active, below reorder, stock value) and a "Needs reordering" table. Data from the existing `IProductService`; no new service was added |
+| `/` | `Home/Index.cshtml` | **Dashboard** — the landing page. Four KPI cards plus a "Needs reordering" work list. See below |
 | `/Products` | `Products/Index.cshtml` | **Server-side** search and paging. See the dedicated section below |
 | `/Products/Create` | `Create.cshtml` | Grouped sections (Identification / Pricing / Stock), two-column on `md+`. **`CompanyId` is a raw text input** marked with an amber border and an explanatory hint — a visible placeholder pending tenant context, deliberately not disguised as finished |
 | `/Products/Edit/{id}` | `Edit.cshtml` | Same shape; `Id` and `CompanyId` hidden |
@@ -373,6 +373,47 @@ and a nav link to a 404 is worse than no link.
 
 The top bar holds the drawer toggle (below `lg`), the page title, **the global search box**, the
 theme toggle and the user dropdown.
+
+## Dashboard screen
+
+`/` — `HomeController.Index` + `Views/Home/Index.cshtml`.
+
+**This is the landing page after login.** It stays on `Home/Index` rather than a separate
+`DashboardController`, because that route is already the application default
+(`{controller=Home}/{action=Index}`) and where sign-in redirects — so it needs no routing change
+and leaves no orphaned `/Home/Index` behind.
+
+### KPI cards
+
+Four cards, no charts. Every figure is a database-side `COUNT` scoped to the company, from
+`IDashboardService`.
+
+| Card | Counts |
+| --- | --- |
+| Products | Products not soft-deleted, any status |
+| Customers | Customers not soft-deleted |
+| Quotations today | `QuotationDate` falls on today (UTC) |
+| **Expiring in 7 days** | `ValidUntil` between today and 7 days ahead. Excludes never-expiring and already-lapsed quotations — see `design-notes.md` |
+
+Each card is a **link** to its list — Products, Customers, Quotations, Quotations — so a number
+that looks wrong is one click from the records behind it. The expiring card turns amber only when
+the count is above zero, so it stays quiet when there is nothing to chase.
+
+### Needs reordering
+
+Below the cards, up to 5 products at or below their reorder level, lowest stock first, each with a
+**Restock** link. Deliberately not a KPI card: it is a work list, and a count alone would not tell
+you which products to act on. Shows an "Everything is stocked" empty state when nothing qualifies.
+
+### States
+
+| State | Appearance |
+| --- | --- |
+| **Loading** | None — server-rendered |
+| **Normal** | Four counts plus the reorder list |
+| **Empty company** | All cards read 0; reorder list shows "Everything is stocked" |
+| **Reorder list fails** | Cards still render; the list falls back to empty rather than blanking the dashboard |
+| **No company configured** | Error banner instead of the cards |
 
 ## Global search
 

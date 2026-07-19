@@ -6,21 +6,34 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace InventoryErp.Web.Controllers;
 
+/// <summary>
+/// The dashboard. Kept on <c>Home/Index</c> rather than a separate <c>DashboardController</c>
+/// because that route is already the application default (<c>{controller=Home}/{action=Index}</c>)
+/// and where login redirects — so it is the landing page with no routing change, and there is no
+/// orphaned <c>/Home/Index</c> left behind.
+/// </summary>
 public class HomeController : Controller
 {
-    /// <summary>
-    /// The dashboard aggregates in memory over one page of products. This is the service's maximum
-    /// page size, so figures are correct up to 200 products and understate beyond that. Replacing
-    /// this needs dedicated aggregate queries rather than a larger page.
-    /// </summary>
-    private const int StatsPageSize = 200;
+    /// <summary>Rows in the reorder work list. Deliberately short — it is a prompt, not a report.</summary>
+    private const int LowStockPreviewCount = 5;
 
-    private readonly IProductService _productService;
+    /// <summary>
+    /// Only the low-stock preview pages products; the headline figures are database counts with
+    /// no such ceiling.
+    /// </summary>
+    private const int LowStockScanSize = 200;
+
+    private readonly IDashboardService _dashboard;
+    private readonly IProductService _products;
     private readonly ICurrentCompanyProvider _currentCompany;
 
-    public HomeController(IProductService productService, ICurrentCompanyProvider currentCompany)
+    public HomeController(
+        IDashboardService dashboard,
+        IProductService products,
+        ICurrentCompanyProvider currentCompany)
     {
-        _productService = productService;
+        _dashboard = dashboard;
+        _products = products;
         _currentCompany = currentCompany;
     }
 
@@ -30,39 +43,33 @@ public class HomeController : Controller
 
         if (companyId is null)
         {
-            return View(new DashboardViewModel
-            {
-                LoadError = "No company has been configured yet.",
-            });
+            return View(new DashboardViewModel { LoadError = "No company has been configured yet." });
         }
 
-        // Derived from the existing product service rather than a new dashboard service:
-        // Customer and Quotation have no application services yet, so there is nothing else
-        // to aggregate.
-        var result = await _productService.GetAllAsync(
-            companyId.Value,
-            pageNumber: 1,
-            pageSize: StatsPageSize,
-            cancellationToken);
+        var stats = await _dashboard.GetStatsAsync(companyId.Value, cancellationToken: cancellationToken);
 
-        if (!result.IsSuccess)
+        if (!stats.IsSuccess)
         {
-            return View(new DashboardViewModel { LoadError = result.Error });
+            return View(new DashboardViewModel { LoadError = stats.Error });
         }
 
-        var products = result.Data!.Items;
+        // Separate concern from the KPI counts: this is the reorder queue, and a failure to load
+        // it should not blank the whole dashboard.
+        var lowStock = await _products.GetAllAsync(
+            companyId.Value, 1, LowStockScanSize, cancellationToken);
+
+        var lowStockProducts = lowStock.IsSuccess
+            ? lowStock.Data!.Items
+                .Where(p => p.IsBelowReorderLevel)
+                .OrderBy(p => p.CurrentStock)
+                .Take(LowStockPreviewCount)
+                .ToList()
+            : [];
 
         return View(new DashboardViewModel
         {
-            TotalProducts = products.Count,
-            ActiveProducts = products.Count(p => p.Status == Domain.Enums.ProductStatus.Active),
-            LowStockCount = products.Count(p => p.IsBelowReorderLevel),
-            InventoryValue = products.Sum(p => p.SellingPrice * p.CurrentStock),
-            LowStockProducts = products
-                .Where(p => p.IsBelowReorderLevel)
-                .OrderBy(p => p.CurrentStock)
-                .Take(5)
-                .ToList(),
+            Stats = stats.Data!,
+            LowStockProducts = lowStockProducts,
         });
     }
 

@@ -1,87 +1,99 @@
+@using InventoryErp.Application.DTOs.Dashboard
 @using InventoryErp.Web.Models
 @model DashboardViewModel
 @{
     ViewData["Title"] = "Dashboard";
+    var stats = Model.Stats;
 }
 
 <div class="page-header">
     <div>
         <h2 class="page-header__title">Dashboard</h2>
-        <p class="page-header__subtitle">Inventory at a glance</p>
+        <p class="page-header__subtitle">Your business at a glance</p>
     </div>
-    <a class="btn btn-primary" asp-controller="Products" asp-action="Create">
-        <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
-        New product
-    </a>
+    <div class="action-bar">
+        <a class="btn btn-outline-secondary" asp-controller="Quotations" asp-action="Create">
+            <svg class="icon" aria-hidden="true"><use href="#i-file" /></svg>
+            New quotation
+        </a>
+        <a class="btn btn-primary" asp-controller="Products" asp-action="Create">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
+            New product
+        </a>
+    </div>
 </div>
 
 @if (Model.LoadError is not null)
 {
     <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
         <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
-        <div>Could not load dashboard data: @Model.LoadError</div>
+        <div>@Model.LoadError</div>
     </div>
 }
 else
 {
     <div class="row g-3 mb-4">
         <div class="col-6 col-xl-3">
-            <div class="card stat-tile">
+            <a class="card stat-tile text-decoration-none" asp-controller="Products" asp-action="Index">
                 <div class="card-body d-flex align-items-center gap-3">
                     <div class="stat-tile__icon">
                         <svg class="icon icon-lg" aria-hidden="true"><use href="#i-box" /></svg>
                     </div>
                     <div>
-                        <p class="stat-tile__label">Total products</p>
-                        <div class="stat-tile__value">@Model.TotalProducts</div>
+                        <p class="stat-tile__label">Products</p>
+                        <div class="stat-tile__value">@stats.ProductCount</div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <div class="col-6 col-xl-3">
-            <div class="card stat-tile">
+            <a class="card stat-tile text-decoration-none" asp-controller="Customers" asp-action="Index">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-tile__icon stat-tile__icon--ok">
-                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-check" /></svg>
+                    <div class="stat-tile__icon">
+                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-users" /></svg>
                     </div>
                     <div>
-                        <p class="stat-tile__label">Active</p>
-                        <div class="stat-tile__value">@Model.ActiveProducts</div>
+                        <p class="stat-tile__label">Customers</p>
+                        <div class="stat-tile__value">@stats.CustomerCount</div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <div class="col-6 col-xl-3">
-            <div class="card stat-tile">
+            <a class="card stat-tile text-decoration-none" asp-controller="Quotations" asp-action="Index">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-tile__icon stat-tile__icon--warn">
+                    <div class="stat-tile__icon stat-tile__icon--ok">
+                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-file" /></svg>
+                    </div>
+                    <div>
+                        <p class="stat-tile__label">Quotations today</p>
+                        <div class="stat-tile__value">@stats.QuotationsToday</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-6 col-xl-3">
+            <a class="card stat-tile text-decoration-none" asp-controller="Quotations" asp-action="Index">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="stat-tile__icon @(stats.QuotationsExpiringSoon > 0 ? "stat-tile__icon--warn" : "")">
                         <svg class="icon icon-lg" aria-hidden="true"><use href="#i-alert" /></svg>
                     </div>
                     <div>
-                        <p class="stat-tile__label">Below reorder level</p>
-                        <div class="stat-tile__value">@Model.LowStockCount</div>
+                        <p class="stat-tile__label">
+                            Expiring in @DashboardStatsDto.ExpiringWindowDays days
+                        </p>
+                        <div class="stat-tile__value">@stats.QuotationsExpiringSoon</div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-xl-3">
-            <div class="card stat-tile">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-tile__icon">
-                        <svg class="icon icon-lg" aria-hidden="true"><use href="#i-currency" /></svg>
-                    </div>
-                    <div>
-                        <p class="stat-tile__label">Stock value</p>
-                        <div class="stat-tile__value">@Model.InventoryValue.ToString("N0")</div>
-                    </div>
-                </div>
-            </div>
+            </a>
         </div>
     </div>
 
+    @* Not a KPI — the reorder queue. Kept from the previous dashboard because it is the one
+       thing here that prompts action rather than reporting a number. *@
     <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between">
             <span>Needs reordering</span>

@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<IQuotationService, QuotationService>();
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ICurrentCompanyProvider, CurrentCompanyProvider>();
 
         return services;

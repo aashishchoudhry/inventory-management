@@ -402,6 +402,48 @@ Each JSON item carries a resolved `url`, built server-side from the type.
 
 ---
 
+## `IDashboardService`
+
+`InventoryErp.Application/Interfaces/IDashboardService.cs`, implemented by
+`InventoryErp.Application/Services/DashboardService.cs`.
+
+### `GetStatsAsync`
+
+```csharp
+Task<ServiceResult<DashboardStatsDto>> GetStatsAsync(
+    Guid companyId,
+    DateTime? asOfUtc = null,
+    CancellationToken cancellationToken = default);
+```
+
+| Input | Rules |
+| --- | --- |
+| `companyId` | Required. `Guid.Empty` → `ValidationFailed` |
+| `asOfUtc` | The "today" the date figures measure against. Defaults to `DateTime.UtcNow`; injectable so date boundaries are testable without freezing the clock |
+
+### Output — `DashboardStatsDto`
+
+| Field | Definition |
+| --- | --- |
+| `ProductCount` | Products in the company, not soft-deleted, any status |
+| `CustomerCount` | Customers in the company, not soft-deleted |
+| `QuotationsToday` | `QuotationDate` in `[today, tomorrow)` |
+| `QuotationsExpiringSoon` | `ValidUntil` in `[today, today + 8)`, i.e. the next 7 days inclusive. Null and already-past values excluded |
+
+A company with no data returns zeros, not an error.
+
+**Every figure is a database `COUNT`**, via `IRepository<T>.CountAsync` — not a page fetched and
+measured. The previous ad-hoc dashboard paged products with a 200-row cap and would have silently
+understated past that.
+
+Date comparisons use **half-open ranges** rather than equality, because `QuotationDate` and
+`ValidUntil` carry a time component: a quotation saved at 14:37 would fail `== today`.
+
+> Counts run sequentially, not via `Task.WhenAll` — the repositories share one scoped `DbContext`,
+> which is not thread-safe.
+
+---
+
 ## `ICurrentCompanyProvider`
 
 ```csharp

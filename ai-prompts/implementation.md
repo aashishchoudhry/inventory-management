@@ -1480,3 +1480,116 @@ right text were present, just unreadable.
 - `LOWER()` in every predicate prevents index seeks — the first thing to revisit if search slows.
 - Search covers products, customers and quotations only; settings and company records are not
   searchable.
+
+---
+
+## 2026-07-18 — Dashboard with real KPI counts
+
+**Tool:** Claude Code (Opus 4.8)
+
+### Prompt
+
+> Now add a dashboard landing page with 4 KPI cards fed from real DB data:
+> - Total product count
+> - Total customer count
+> - Today's quotation count
+> - One more meaningful count — your call, pick something useful (e.g. quotations pending/expiring
+>   soon based on validUntil, or total quotation value this month) and tell me what you chose and why
+>
+> In InventoryErp.Application, add IDashboardService/DashboardService returning these counts, scoped
+> to companyId. In InventoryErp.Web, make this the default landing page after login (or a dedicated
+> Dashboard action — your call) with 4 simple cards, no charts, no Chart.js — that's Stretch, not Core.
+>
+> Then update ui-flow.md, data-model.md or design-notes.md with a one-line definition of the 4th KPI,
+> and ai-prompts/implementation.md.
+> Test manually: confirm all 4 numbers match what's actually in the database.
+
+### 4th KPI: **quotations expiring in the next 7 days**
+
+`ValidUntil` between today and 7 days ahead inclusive; never-expiring and already-lapsed excluded.
+
+Chosen over "total quotation value this month" because it is the only candidate that is a **call to
+action**. Each number is a customer to chase before their quote lapses. The other three cards report
+the state of the business; a month's value tells you what already happened rather than what to do
+next. Already-expired quotations are excluded deliberately — nothing can be done about them, and
+including them would inflate a number whose whole purpose is "here is your to-do list".
+
+### Route decision: kept on `Home/Index`
+
+Rather than a new `DashboardController`. `{controller=Home}/{action=Index}` is already the
+application default and where login redirects, so it is the landing page with **no routing change**
+and no orphaned `/Home/Index` left behind.
+
+### What Claude Code did
+
+- **Added `IRepository<T>.CountAsync`** — a missing primitive. Every KPI is a database `COUNT`,
+  not a page fetched and measured.
+- `DashboardStatsDto`, `IDashboardService`, `DashboardService` in Application, depending only on
+  `IUnitOfWork`.
+- `asOfUtc` parameter so date boundaries are testable without freezing the clock.
+- Rebuilt the dashboard view: four linked KPI cards, and the "Needs reordering" list kept below.
+- 13 new tests, taking the suite from 142 to **155**.
+
+### Fixed a pre-existing bug in passing
+
+The old dashboard computed its figures by fetching **one page of up to 200 products** and counting
+in memory — flagged as a limitation when it was built. Past 200 products every number would have
+silently understated. Database counts have no such ceiling.
+
+Also switched the date comparisons to **half-open ranges** (`>= today && < tomorrow`) rather than
+equality. `QuotationDate` carries a time component, so a quotation saved at 14:37 would have failed
+`== today` and gone uncounted. There is a test named for exactly this.
+
+### Verification — all four against SQL
+
+Ground truth queried directly, then compared with the rendered page:
+
+| KPI | SQL | Dashboard |
+| --- | --- | --- |
+| Products | 8 | **8** |
+| Customers | 7 | **7** |
+| Quotations today | 1 | **1** |
+| Expiring in 7 days | 0 | **0** |
+
+Zero is a weak assertion for the new KPI, so three quotations were inserted to exercise the
+boundaries — one expiring in 3 days, one in 8, one already lapsed:
+
+| KPI | Expected | Dashboard |
+| --- | --- | --- |
+| Quotations today | 3 | **3** |
+| Expiring in 7 days | **1** (day-8 and lapsed excluded) | **1** |
+
+Test rows were then deleted and the dashboard returned to 8 / 7 / 1 / 0. No console errors; build
+clean, **155/155 tests passing**.
+
+### Accepted
+
+- **`CountAsync` on the repository** rather than reusing `ListPagedAsync` and reading `TotalCount`.
+  The latter works but fetches a row it discards, and the intent is less clear.
+- **Cards link to their lists**, so a number that looks wrong is one click from the records behind it.
+- **The expiring card only turns amber above zero**, so it stays quiet when there is nothing to chase.
+- **Reorder-list failure does not blank the dashboard** — the KPI cards still render.
+
+### Changed beyond the request
+
+- **Kept the "Needs reordering" list.** The prompt specified four cards; the previous dashboard's
+  low-stock table is a work list rather than a KPI, and deleting a working, verified feature to
+  match a card count would have been a net loss. The low-stock count it displaced now lives in a
+  more useful form.
+- **Added `CountAsync`** to the Domain repository contract.
+
+### Rejected
+
+- No charts or Chart.js — explicitly Stretch.
+- Did not pick "total quotation value this month": a lagging metric, and with one seeded quotation
+  it would read as a near-meaningless number.
+- Did not add caching. Four `COUNT`s on indexed columns are cheap, and cache invalidation would
+  cost more than it saves at this scale.
+
+### Open items after this step
+
+- The reorder preview still pages products (200) rather than querying "where stock <= reorder
+  level" directly — `IsBelowReorderLevel` is a computed property EF cannot translate, so filtering
+  happens in memory. Correct fix is a persisted computed column or an explicit predicate.
+- No date-range filter or trend on the dashboard; every figure is "right now".
+- `asOfUtc` uses UTC throughout, so "today" is UTC rather than the company's local day.

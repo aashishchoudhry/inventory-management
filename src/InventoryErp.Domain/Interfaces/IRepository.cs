@@ -36,6 +36,17 @@ public interface IRepository<T> where T : BaseEntity
         Expression<Func<T, bool>> predicate,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Counts matching rows in the database, without materialising any of them.
+    /// </summary>
+    /// <remarks>
+    /// Use this for totals rather than fetching a page and reading its length — that only ever
+    /// counts as far as the page size, which silently understates once the data outgrows it.
+    /// </remarks>
+    Task<int> CountAsync(
+        Expression<Func<T, bool>>? predicate = null,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(T entity, CancellationToken cancellationToken = default);
 
     void Update(T entity);
