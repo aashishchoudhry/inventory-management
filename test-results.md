@@ -122,6 +122,20 @@ columns.
 | `DeleteAsync_soft_deletes_and_hides_the_product` | Row hidden from queries but present under `IgnoreQueryFilters()` |
 | `DeleteAsync_returns_NotFound_for_an_unknown_id` | Unknown id → `NotFound` |
 
+### `WriteTenantIsolationTests` — 12 passed
+
+Added at final review, alongside the existing read-path isolation tests, after `CompanyId` turned
+out to be client-suppliable (`debugging-notes.md` #10). Together these are what closed the
+"tenant isolation is untested" gap this document previously listed.
+
+| Test group | Verifies |
+| --- | --- |
+| Create ownership | A created record is owned by the *signed-in* user's company, never a posted value |
+| Cross-tenant read/update/delete by id | Another company's id returns `NotFound` rather than the record |
+| Ownership immutability | `UpdateAsync` never reassigns `CompanyId`, so a record cannot be moved between tenants |
+| Per-tenant SKU | The same SKU may exist in two companies |
+| Quotation references | A quotation cannot reference another company's customer or product |
+
 ## Manual verification
 
 ### Schema behaviour — direct SQL against SQL Server
@@ -175,11 +189,12 @@ Test data created during this run was deleted afterwards; the database is back t
 ## Not yet covered
 
 - No automated test exercises the database constraints — the duplicate-SKU test passes on the
-  service guard, not on the unique index.
+  service guard, not on the unique index. The same limitation applies to the `CompanyId` foreign
+  keys added in `AddCompanyForeignKeys`: the in-memory provider ignores them entirely, so they were
+  verified by hand against SQL Server (`debugging-notes.md` #11) rather than by the suite.
 - No web-layer or controller tests.
 - No tests for `Company`, `CompanySetting`, `Customer`, `Quotation`, `QuotationLine` services —
   those services do not exist yet.
-- Tenant isolation is untested, and currently unenforced.
 - **The end-to-end run above predates the `Product` rework and the database instance switch.** It
   should be repeated before any release; the current database is empty, so it would need a fresh
   user and product.

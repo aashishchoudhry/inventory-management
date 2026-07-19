@@ -168,6 +168,76 @@ with it.
 
 ---
 
+## 10. Client-supplied `CompanyId` broke tenant isolation
+
+**When:** Final review before submission, prompted by a note in `acceptance-criteria.md` rather than
+by a failing test.
+
+**Symptom:** none visible. Everything worked; the suite was green.
+
+**Cause:** `CompanyId` was a bindable property on `CreateProductRequest` and `UpdateProductRequest`,
+so ASP.NET model binding populated it from whatever the client posted. Investigation found three
+further holes that had never been documented: `GetByIdAsync`, `UpdateAsync` and `DeleteAsync` took
+**no company argument at all**, so any product could be read, edited, moved between companies, or
+deleted by id.
+
+**Fix:** removed `CompanyId` from the request DTOs entirely — there is no longer a property to bind —
+and made the tenant an explicit argument on every affected method. Because the property was deleted,
+the compiler located all ~20 call sites; nothing relied on remembering to check.
+
+**Verified:** POSTing a forged `CompanyId` now writes under the signed-in user's company, zero
+records land under the injected id, and foreign ids return 404 on Details and Edit. 12 tests in
+`Acceptance/WriteTenantIsolationTests.cs`.
+
+**Full write-up:** `ai-prompts/debugging.md` #10 — including the mistake made *while* fixing it, where
+a bulk edit silently weakened two tests that kept passing.
+
+**Lesson:** never put the tenant on the request model. A bindable `CompanyId` delegates an
+authorisation decision to the HTTP client.
+
+---
+
+## 11. `CompanyId` had no foreign key on any table
+
+**When:** Immediately after item 10, prompted by the question *"shouldn't there be a database
+migration for this fix too?"*
+
+**Symptom:** none. Nothing failed, and the fix in item 10 was complete and correct.
+
+**Cause:** The answer to the question was "no" — item 10 changed DTOs, service signatures,
+controllers and views only, so `dotnet ef migrations add` would have produced an empty `Up()`.
+But checking the schema to *prove* that turned up something else: the database had only three
+domain foreign keys (QuotationLine→Quotation, QuotationLine→Product, Quotation→Customer). **No
+`CompanyId` column had a foreign key at all.**
+
+The reason is structural: the domain entities have no navigation properties, so EF infers no
+relationship, and `HasOne<Company>()` had never been configured. The tables had an *index* on
+`CompanyId` — which looks reassuring in a schema dump — but nothing behind it. The forged
+`CompanyId` from item 10 was rejected by the application; the database would have stored it happily.
+
+**Fix:** configured the relationship on `Product`, `Customer`, `Quotation` and `CompanySetting`
+using the same reference-less `HasOne<Company>().WithMany()` overload already used for
+Quotation→Customer, with `OnDelete(DeleteBehavior.Restrict)`. Migration `AddCompanyForeignKeys`.
+
+**Verified against real SQL Server**, because the in-memory test provider ignores foreign keys
+entirely and all 185 tests passed both before and after:
+
+- Inserting a product with a non-existent `CompanyId` → error 547, constraint named in the message.
+- `DELETE FROM Companies` while records exist → error 547, `Restrict` holds.
+- Normal writes through the UI (product + quotation `QT-2026-0002`) still succeed, and land with the
+  correct server-derived `CompanyId`.
+
+**Scope, stated honestly:** this stops *forged and orphan* tenant ids. It does **not** stop one real
+company's id being used to reach another's rows — the FK is satisfied either way. That remains the
+application's job, and the global query filter's.
+
+**Lesson:** an index on a foreign-key column is not a foreign key, and a green test suite proves
+nothing about constraints when the test provider does not implement them. Also: the question that
+found this was aimed at something else entirely. Checking the schema to justify a "no" was what
+surfaced the real gap.
+
+---
+
 ## Open issues, not yet bugs
 
 Recorded here because they will become bugs when the relevant feature is built:
@@ -175,5 +245,12 @@ Recorded here because they will become bugs when the relevant feature is built:
 - **Cascade delete does not fire on soft delete.** `Repository<T>.Remove` issues an `UPDATE`, so the
   database's `ON DELETE CASCADE` never triggers. Soft-deleting a quotation would leave its lines
   visible and orphaned. Any quotation-delete feature must cascade the soft delete in application code.
-- **Tenant isolation is not enforced.** `CompanyId` is a column, not a boundary. Reads return rows
-  across all tenants, and `CompanyId` is a user-editable form field on the product Create form.
+- **No global query filter on `CompanyId`.** Reads (list, search and by id) and writes (create,
+  update, delete) are all scoped by company and covered by tests, and the database now rejects
+  forged or orphan tenant ids via foreign keys (item 11) — but *scoping between two real companies*
+  still rests on every service filtering its own queries rather than on the data layer. A global EF
+  query filter, mirroring the existing soft-delete one, would make the whole bug class structurally
+  impossible.
+
+  *This entry previously read "tenant isolation is not enforced… `CompanyId` is a user-editable form
+  field". That was true until final review, when the defect was found and fixed — see item 10 below.*

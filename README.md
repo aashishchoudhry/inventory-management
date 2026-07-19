@@ -2,9 +2,13 @@
 
 An SME ERP / inventory management application built on .NET 10 using Clean Architecture.
 
-> **Status: in development.** The domain model and persistence layer are complete; application
-> services and UI exist only for `Product`. See [implementation-plan.md](implementation-plan.md) for
-> progress and [known gaps](#known-gaps).
+> **Status: Core scope complete.** Authentication, products (full CRUD with search), customers
+> (read-only), quotations with server-side GST calculation and PDF export, company settings with
+> logo upload, global search, and a dashboard — all backed by SQL Server and covered by 185 tests.
+>
+> Read [known gaps](#known-gaps) before using this for anything real; the most significant is that
+> tenant *scoping* is enforced in application services rather than by a global query filter. Progress
+> log in [implementation-plan.md](implementation-plan.md).
 
 ## Architecture
 
@@ -57,18 +61,48 @@ InventoryErp.Web             → Application, Infrastructure, Shared
 git clone <repo-url>
 cd inventory-management
 
-# Create the database
-dotnet ef database update --project src/InventoryErp.Infrastructure --startup-project src/InventoryErp.Web
+# 1. Restore packages. Required before anything else — `dotnet ef` does not restore for you
+#    and fails with NETSDK1004 on a fresh clone.
+dotnet restore
 
-# Run
+# 2. Check the connection string (see below) before continuing.
+
+# 3. Run. Pending migrations are applied and sample data seeded automatically on first start.
 dotnet run --project src/InventoryErp.Web
 ```
 
-Then register a user and browse to `/Products`.
+Browse to the URL printed in the console and **sign in with the seeded account**:
 
-The connection string lives in `src/InventoryErp.Web/appsettings.json` under
-`ConnectionStrings:DefaultConnection`. Adjust it if your SQL Server instance differs — the provider
-is standard SQL Server, so switching instances is a connection-string change only.
+| Email | Password |
+| --- | --- |
+| `admin@inventoryerp.local` | `Admin@123456` |
+
+> There is no self-registration — the sign-up pages were deliberately removed, so the seeded
+> account is the only way in. Development credentials only; see [Security](#security).
+
+On first run this creates one company, 8 products, 7 customers, 3 roles and the admin user.
+Seeding is skipped on later runs, so restarting never duplicates data.
+
+### Connection string
+
+`src/InventoryErp.Web/appsettings.json` → `ConnectionStrings:DefaultConnection`, which defaults to
+the local default SQL Server instance using Windows authentication:
+
+```
+Server=.;Database=InventoryErp;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True
+```
+
+Adjust it if your instance differs — the provider is standard SQL Server, so switching instances
+(or to Azure SQL) is a connection-string change only, with no code change.
+
+### Applying migrations manually
+
+Not required — the application migrates itself on startup. If you want to run them separately
+(installing `dotnet-ef` first, per Prerequisites):
+
+```bash
+dotnet ef database update --project src/InventoryErp.Infrastructure --startup-project src/InventoryErp.Web
+```
 
 Full database documentation, including how to verify persistence across a restart, is in
 [database/setup-notes.md](database/setup-notes.md).
@@ -77,8 +111,17 @@ Full database documentation, including how to verify persistence across a restar
 
 ```bash
 dotnet build InventoryErp.slnx    # 0 warnings (warnings-as-errors is enabled)
-dotnet test  InventoryErp.slnx    # 14 tests
+dotnet test  InventoryErp.slnx    # 185 tests
 ```
+
+The two mandatory acceptance tests can be run alone:
+
+```bash
+dotnet test --filter "FullyQualifiedName~Acceptance"
+```
+
+Tests use the EF in-memory provider and need no database. See [test-strategy.md](test-strategy.md)
+for what that does **not** cover.
 
 The solution file is `.slnx`, the XML format that is default in .NET 10. It works with the .NET CLI
 and current Visual Studio / Rider, but not older tooling.
@@ -91,14 +134,33 @@ with field-level detail in [data-model.md](data-model.md).
 `ApplicationUser` / `ApplicationRole` are **not** domain entities. They derive from ASP.NET Identity
 types and live in Infrastructure, so no ASP.NET dependency reaches Domain.
 
+## Security
+
+No API keys, tokens or passworded connection strings are committed. The connection string uses
+Windows integrated authentication (`Trusted_Connection=True`), so it contains no credential.
+
+Two things **are** committed deliberately, and must not reach a deployed environment:
+
+| Item | Where | Why it is acceptable here |
+| --- | --- | --- |
+| Seed admin password `Admin@123456` | `SeedData.cs`, and documented in this README | A development fixture. There is no registration, so a known account is the only way to sign in for review |
+| `TrustServerCertificate=True` | `appsettings.json` | Accepts a self-signed local SQL certificate. Should be removed where a valid certificate exists |
+
+Before any real deployment: gate seeding to the Development environment or move the credential to
+user secrets, remove `TrustServerCertificate`, move the connection string out of
+`appsettings.json`, and revisit `RequireConfirmedAccount = false`.
+
 ## Known gaps
 
 These are tracked deliberately rather than forgotten:
 
-- **Tenant isolation is enforced by convention, not by the database.** Services scope every query
-  by `CompanyId`, but there is no global query filter, and `CompanyId` is still a user-editable
-  field on the product create form. A caller that forgets to pass it, or a user who edits it, is
-  not stopped. Needs an ambient tenant context plus a query filter.
+- **Tenant scoping has no database-level enforcement.** Reads and writes are both scoped by
+  `CompanyId` and covered by tests — including the id-based paths, after a client-supplied
+  `CompanyId` defect was found and fixed in review (`ai-prompts/debugging.md` #10). The database now
+  enforces *referential* integrity on `CompanyId` (foreign keys added in `AddCompanyForeignKeys`),
+  so a forged or orphan tenant id is rejected outright. But *scoping* between two real companies
+  still rests on every service filtering its own queries; a global EF query filter would make that
+  bug class structurally impossible.
 - **`ICurrentCompanyProvider` resolves the single seeded company.** Correct while one company
   exists; wrong the moment a second is added.
 - **Cascade delete does not fire on soft delete.** The database cascade only triggers on a hard

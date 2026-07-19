@@ -236,13 +236,41 @@ it here would create two sources of truth that could disagree.
 
 ## Multi-tenancy
 
-`Product`, `Customer` and `CompanySetting` all carry a `CompanyId`. Tenant isolation is currently
-enforced **only in application service logic** (for example, the product SKU duplicate check is
-scoped by `CompanyId`) — there is no global tenant query filter and no ambient tenant context yet.
+`Product`, `Customer`, `Quotation` and `CompanySetting` all carry a `CompanyId`. Isolation is
+enforced **in application service logic**. The database enforces *referential* integrity on that
+column, but not tenant scoping — see the table below for which layer does what.
 
-Until an `ICurrentTenant` abstraction exists, read methods such as `GetAllAsync` return rows across
-all tenants. This is a known gap, not a design decision. See the open items in
-`implementation-plan.md`.
+### Current state — accurate as of the final review
+
+| Path | Status |
+| --- | --- |
+| **Reads — list and search** | **Isolated and tested.** `GetAllAsync` and `SearchAsync` on products, customers and quotations take `companyId` and filter on it. Tests assert a second company's records never appear |
+| **Reads — by id** | **Isolated and tested.** `GetByIdAsync` takes `companyId` and returns `NotFound` for another tenant's record, so an id cannot be probed. **This was not true until the final review** — the method took no company argument at all |
+| **Writes — create** | **Isolated and tested.** The tenant is an explicit service argument resolved from the signed-in user. `CompanyId` was removed from the request DTOs entirely, so it cannot be model-bound from a posted form |
+| **Writes — update and delete** | **Isolated and tested.** Both take `companyId`; update never reassigns it, so a record cannot be moved between tenants |
+| **Database — referential integrity** | **Enforced.** All four tables have a `Restrict` foreign key from `CompanyId` to `Companies.Id` (migration `AddCompanyForeignKeys`). A forged or orphan tenant id is rejected by SQL Server with error 547, and a company holding records cannot be deleted |
+| **Database — tenant scoping** | **Absent.** There is still no global query filter on `CompanyId`, so the database will not stop one *real* company's id being used to reach another's rows. That remains the application's job |
+
+The tenant comes from `ICurrentCompanyProvider`, which currently resolves the single seeded
+company because nothing links a user to one.
+
+### The defect that was fixed
+
+Until final review, `CompanyId` was a **bindable property on the product request DTOs** and rendered
+as a form field. A signed-in user could create a product owned by another company, and — via the
+hidden field on the edit form — move an existing product into one. `GetByIdAsync` and `DeleteAsync`
+performed no company check at all.
+
+The fix removed the property from the DTOs and made the tenant an explicit argument on every
+affected method. Full account in `ai-prompts/debugging.md` #10; proof in
+`tests/…/Acceptance/WriteTenantIsolationTests.cs`.
+
+### What is still missing
+
+Scoping depends on **every service remembering to filter**, and on callers passing the right
+company. A global EF query filter on `CompanyId` — mirroring the existing soft-delete filter —
+would make the whole class of bug structurally impossible, and is the right fix before a second
+company exists. A company claim on `ApplicationUser` is the other half.
 
 ---
 
@@ -256,6 +284,10 @@ ASP.NET Identity's `IdentityUser<Guid>` / `IdentityRole<Guid>` and live in
 `InventoryErp.Infrastructure/Identity`, because putting them in Domain would drag an ASP.NET
 dependency into a layer that must have none.
 
-No navigation properties exist on any entity yet — relationships between `Quotation` and
-`QuotationLine`, `Product` and `Customer` are expressed as bare foreign-key `Guid`s. Navigation
-properties and relationship configuration are deferred to the Infrastructure / EF Core step.
+No navigation properties exist on any entity — relationships are expressed as bare foreign-key
+`Guid`s and configured in Infrastructure with EF's reference-less `HasOne<T>().WithMany()` overload.
+
+This is worth knowing because it caused a real gap: with no navigation property, EF infers no
+relationship, so the `CompanyId` columns had an index but **no foreign key** until the
+`AddCompanyForeignKeys` migration added them explicitly. Any future tenant-scoped entity must
+configure its `Company` relationship by hand — nothing will infer it.

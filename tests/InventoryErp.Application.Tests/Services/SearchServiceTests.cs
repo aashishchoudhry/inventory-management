@@ -74,9 +74,8 @@ public class SearchServiceTests : IDisposable
 
         await _context.SaveChangesAsync();
 
-        await products.CreateAsync(new CreateProductRequest
+        await products.CreateAsync(_companyId, new CreateProductRequest
         {
-            CompanyId = _companyId,
             Name = "Safety Helmet (Yellow)",
             Sku = "PPE-HLM-YEL",
             Barcode = "8901234500048",
@@ -86,9 +85,8 @@ public class SearchServiceTests : IDisposable
             Status = ProductStatus.Active,
         });
 
-        await products.CreateAsync(new CreateProductRequest
+        await products.CreateAsync(_companyId, new CreateProductRequest
         {
-            CompanyId = _companyId,
             Name = "Hex Bolt M10",
             Sku = "FST-HB-M10",
             SellingPrice = 24.50m,
@@ -97,9 +95,8 @@ public class SearchServiceTests : IDisposable
             Status = ProductStatus.Active,
         });
 
-        await quotations.CreateQuotationAsync(new CreateQuotationRequest
+        await quotations.CreateQuotationAsync(_companyId, new CreateQuotationRequest
         {
-            CompanyId = _companyId,
             CustomerId = customer.Id,
             QuotationDate = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
             Lines =

@@ -8,7 +8,16 @@ namespace InventoryErp.Domain.Entities;
 /// </summary>
 public class Product : BaseEntity
 {
-    /// <summary>Owning tenant. Every query for products must filter on this.</summary>
+    /// <summary>
+    /// Owning tenant. Every query for products must filter on this.
+    /// </summary>
+    /// <remarks>
+    /// This property is the tenancy mechanism and must stay. It is deliberately absent from
+    /// <c>CreateProductRequest</c> / <c>UpdateProductRequest</c> so it can never be model-bound
+    /// from client input — the tenant is passed to the service as an explicit argument instead.
+    /// Removing the column, or reintroducing it on a request DTO, reopens the defect in
+    /// <c>ai-prompts/debugging.md</c> #10.
+    /// </remarks>
     public Guid CompanyId { get; set; }
 
     public required string Name { get; set; }

@@ -45,6 +45,13 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.HasIndex(p => p.CompanyId);
 
+        // Restrict: a company owning products must not be deletable out from under them. The
+        // application soft-deletes anyway, so no cascade would ever fire.
+        builder.HasOne<Company>()
+            .WithMany()
+            .HasForeignKey(p => p.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Ignore(p => p.IsBelowReorderLevel);
     }
 }

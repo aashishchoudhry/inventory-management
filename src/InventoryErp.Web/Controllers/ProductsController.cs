@@ -68,7 +68,14 @@ public class ProductsController : Controller
 
     public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _productService.GetByIdAsync(id, cancellationToken);
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            return NotFound();
+        }
+
+        var result = await _productService.GetByIdAsync(id, companyId.Value, cancellationToken);
 
         return result.IsSuccess ? View(result.Data) : Failed(result);
     }
@@ -84,7 +91,16 @@ public class ProductsController : Controller
             return View(request);
         }
 
-        var result = await _productService.CreateAsync(request, cancellationToken);
+        // The tenant comes from the signed-in user, never from the posted form.
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            ModelState.AddModelError(string.Empty, "No company has been configured yet.");
+            return View(request);
+        }
+
+        var result = await _productService.CreateAsync(companyId.Value, request, cancellationToken);
 
         if (result.IsSuccess)
         {
@@ -98,7 +114,14 @@ public class ProductsController : Controller
 
     public async Task<IActionResult> Edit(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _productService.GetByIdAsync(id, cancellationToken);
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            return NotFound();
+        }
+
+        var result = await _productService.GetByIdAsync(id, companyId.Value, cancellationToken);
 
         if (!result.IsSuccess)
         {
@@ -110,7 +133,6 @@ public class ProductsController : Controller
         return View(new UpdateProductRequest
         {
             Id = product.Id,
-            CompanyId = product.CompanyId,
             Name = product.Name,
             Sku = product.Sku,
             Barcode = product.Barcode,
@@ -132,7 +154,14 @@ public class ProductsController : Controller
             return View(request);
         }
 
-        var result = await _productService.UpdateAsync(request, cancellationToken);
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            return NotFound();
+        }
+
+        var result = await _productService.UpdateAsync(companyId.Value, request, cancellationToken);
 
         if (result.IsSuccess)
         {
@@ -153,7 +182,14 @@ public class ProductsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _productService.DeleteAsync(id, cancellationToken);
+        var companyId = await _currentCompany.GetCompanyIdAsync(cancellationToken);
+
+        if (companyId is null)
+        {
+            return NotFound();
+        }
+
+        var result = await _productService.DeleteAsync(id, companyId.Value, cancellationToken);
 
         if (!result.IsSuccess)
         {

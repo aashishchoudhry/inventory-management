@@ -73,19 +73,30 @@ public sealed class ProductService : IProductService
         return ServiceResult<PagedResult<ProductDto>>.Success(page.Map(ToDto));
     }
 
-    public async Task<ServiceResult<ProductDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ServiceResult<ProductDto>> GetByIdAsync(
+        Guid id,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
     {
         var product = await Products.GetByIdAsync(id, cancellationToken);
 
-        return product is null
+        // Scoped to the company: another tenant's product reads as not found rather than
+        // forbidden, so an id cannot be probed for existence.
+        return product is null || product.CompanyId != companyId
             ? ServiceResult<ProductDto>.NotFound($"No product with id '{id}'.")
             : ServiceResult<ProductDto>.Success(ToDto(product));
     }
 
     public async Task<ServiceResult<ProductDto>> CreateAsync(
+        Guid companyId,
         CreateProductRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (companyId == Guid.Empty)
+        {
+            return ServiceResult<ProductDto>.Invalid("A company must be specified.");
+        }
+
         var sku = request.Sku.Trim();
 
         if (string.IsNullOrWhiteSpace(sku))
@@ -94,14 +105,15 @@ public sealed class ProductService : IProductService
         }
 
         // SKU uniqueness is per tenant, matching the composite index on (CompanyId, Sku).
-        if (await Products.AnyAsync(p => p.CompanyId == request.CompanyId && p.Sku == sku, cancellationToken))
+        if (await Products.AnyAsync(p => p.CompanyId == companyId && p.Sku == sku, cancellationToken))
         {
             return ServiceResult<ProductDto>.Conflict($"A product with SKU '{sku}' already exists.");
         }
 
         var product = new Product
         {
-            CompanyId = request.CompanyId,
+            // From the caller's authenticated company, never from the request.
+            CompanyId = companyId,
             Name = request.Name.Trim(),
             Sku = sku,
             Barcode = request.Barcode,
@@ -120,12 +132,15 @@ public sealed class ProductService : IProductService
     }
 
     public async Task<ServiceResult<ProductDto>> UpdateAsync(
+        Guid companyId,
         UpdateProductRequest request,
         CancellationToken cancellationToken = default)
     {
         var product = await Products.GetByIdAsync(request.Id, cancellationToken);
 
-        if (product is null)
+        // Company check before anything else: without it, any id could be edited — including
+        // another tenant's product.
+        if (product is null || product.CompanyId != companyId)
         {
             return ServiceResult<ProductDto>.NotFound($"No product with id '{request.Id}'.");
         }
@@ -133,13 +148,13 @@ public sealed class ProductService : IProductService
         var sku = request.Sku.Trim();
 
         if (await Products.AnyAsync(
-                p => p.CompanyId == request.CompanyId && p.Sku == sku && p.Id != request.Id,
+                p => p.CompanyId == companyId && p.Sku == sku && p.Id != request.Id,
                 cancellationToken))
         {
             return ServiceResult<ProductDto>.Conflict($"A product with SKU '{sku}' already exists.");
         }
 
-        product.CompanyId = request.CompanyId;
+        // CompanyId is deliberately not reassigned — a product cannot be moved between tenants.
         product.Name = request.Name.Trim();
         product.Sku = sku;
         product.Barcode = request.Barcode;
@@ -156,11 +171,15 @@ public sealed class ProductService : IProductService
         return ServiceResult<ProductDto>.Success(ToDto(product));
     }
 
-    public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ServiceResult> DeleteAsync(
+        Guid id,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
     {
         var product = await Products.GetByIdAsync(id, cancellationToken);
 
-        if (product is null)
+        // Company check before deleting: without it, any id could be soft-deleted.
+        if (product is null || product.CompanyId != companyId)
         {
             return ServiceResult.NotFound($"No product with id '{id}'.");
         }

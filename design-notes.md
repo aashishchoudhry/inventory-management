@@ -243,6 +243,25 @@ Each entity gets its own configuration class (`CompanyConfiguration`, `CompanySe
 keeps `OnModelCreating` to a handful of lines regardless of how many entities exist, and makes the
 mapping for any entity easy to find.
 
+### Relationships are configured explicitly, because nothing infers them
+
+No entity has navigation properties — relationships are bare foreign-key `Guid`s, configured with
+EF's reference-less `HasOne<T>().WithMany()` overload. `Restrict` is chosen over EF's default
+cascade wherever the principal is a record with independent commercial meaning: deleting a customer
+must not destroy the quotations issued to them, and deleting a company must not destroy its
+catalogue. `QuotationLine` → `Quotation` is the one genuine cascade, because a line has no
+existence apart from its parent.
+
+**This has a sharp edge worth recording.** With no navigation property, EF infers *no relationship
+at all* — so a foreign key exists only if someone wrote it by hand. The four `CompanyId` columns
+were indexed but had **no foreign key** until the `AddCompanyForeignKeys` migration, and nothing
+surfaced that: the model built, the app ran, and 185 tests passed, because the in-memory test
+provider does not implement foreign keys. An index on a foreign-key column reads like a constraint
+in a schema dump and is not one.
+
+Any future tenant-scoped entity must configure its `Company` relationship explicitly. See
+`debugging-notes.md` #11.
+
 ### Cross-cutting behaviour in the DbContext
 
 Two concerns are handled centrally in `InventoryErpDbContext` rather than per entity:

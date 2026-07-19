@@ -1,10 +1,20 @@
 # Acceptance Criteria
 
-> **Partial.** Only criteria explicitly stated so far are listed. The full set depends on
-> `requirements-analysis.md`, which is still unwritten — no complete functional requirements have
-> been provided. This file grows as criteria are stated.
+> **Scope caveat — read this first.** Criteria 1–12 are the ones **stated explicitly in prompts**
+> during development. They were not transcribed from the project guide, which has never been shared
+> with the assistant, so **this list cannot be confirmed complete against that document.** Anyone
+> signing off should check it against the guide directly.
+>
+> Criteria 13–16 were added at wrap-up to record behaviour that was built and verified but for
+> which no criterion had been stated. They are labelled *(inferred)* rather than presented as
+> requirements.
+>
+> `requirements-analysis.md` is likewise **reverse-engineered from the delivered system**, not
+> transcribed from the guide.
 
 ## Core
+
+**Status: 16 of 16 met.** No criterion is outstanding. Two carry caveats, noted inline.
 
 | # | Criterion | Status | Verified |
 | --- | --- | --- | --- |
@@ -20,6 +30,10 @@
 | 10 | Backend validation rejects invalid quotations | **Met** | 2026-07-18 |
 | 11 | Global search returns relevant products and customers (and quotations) | **Met** | 2026-07-18 |
 | 12 | Mandatory xUnit tests pass | **Met** | 2026-07-18 |
+| 13 | Company settings can be stored and edited *(inferred)* | **Met** | 2026-07-18 |
+| 14 | A quotation can be exported as a PDF *(inferred)* | **Met — with caveat** | 2026-07-18 |
+| 15 | A dashboard shows live counts from the database *(inferred)* | **Met** | 2026-07-18 |
+| 16 | Data is isolated per company on both read and write paths *(inferred)* | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -214,8 +228,72 @@ colour, and a logo path whose file is missing.
 Full output and a per-test explanation in [test-results.md](test-results.md). Scope boundaries —
 what is deliberately *not* tested — in [test-strategy.md](test-strategy.md).
 
-## Not yet stated
+### 13. Company settings can be stored and edited *(inferred)*
 
-Criteria for product, customer, company and quotation management have not been provided. Known
-functional gaps that would likely become criteria are tracked in `README.md` and
-`implementation-plan.md` — most significantly that tenant isolation is not enforced.
+`/Settings` edits company identity, address, tax identifiers, document text, accent colour and
+logo. Values persist as `CompanySetting` key/value rows and are mirrored onto the `Company`
+columns. Verified manually: changed City and PIN, reloaded a fresh page, values persisted; a second
+save updated rather than duplicated rows (10 rows before and after). Covered by 18 service tests.
+
+### 14. A quotation can be exported as a PDF *(inferred)* — **with caveat**
+
+`/Quotations/Pdf/{id}` returns a valid PDF (`%PDF-1.4`, 54 KB, correct filename and content type),
+with the company logo embedded in the header. Deleting the logo file and regenerating produced a
+valid PDF with zero embedded images and no error, proving graceful degradation.
+
+> **Caveat: the PDF layout has never been visually inspected.** No PDF renderer is available in the
+> development environment (`pdftoppm` absent; the preview browser's plugin renders blank), so
+> verification was structural — valid header, byte size, embedded-image count, no exceptions. A
+> human should open one and confirm the layout reads correctly before this is considered signed off.
+
+### 15. A dashboard shows live counts from the database *(inferred)*
+
+Four KPI cards — products, customers, quotations today, quotations expiring within 7 days — each a
+database `COUNT` scoped to the company. All four were cross-checked against direct SQL (8 / 7 / 1 /
+0), then boundary-tested by inserting quotations at 3 days, 8 days and already-lapsed, which moved
+the figures to the expected 3 and 1. Covered by 13 service tests.
+
+### 16. Data is isolated per company on both read and write paths *(inferred)*
+
+Added after a **security-relevant defect was found in final review**: `CompanyId` was a bindable
+property on the product request DTOs, so a signed-in user could create a product under another
+company, or move an existing one via the hidden field on the edit form. `GetByIdAsync` and
+`DeleteAsync` performed no company check at all.
+
+Fixed by removing `CompanyId` from the request DTOs entirely and making the tenant an explicit
+service argument. Verified against the running application:
+
+| Attack | Result |
+| --- | --- |
+| `CompanyId` inputs present on the create form | **0** — the field no longer exists |
+| POST with `CompanyId=99999999-…` forced into the request body | Product created under the **signed-in user's** company |
+| Records written under the injected company id | **0** |
+| `GET /Products/Details/{another-tenant-id}` | **404** |
+| `GET /Products/Edit/{another-tenant-id}` | **404** |
+
+| Path | Isolated | Tested |
+| --- | --- | --- |
+| List and search (products, customers, quotations) | Yes | Yes |
+| Read by id | Yes | Yes — *not true before this fix* |
+| Create | Yes | Yes |
+| Update / delete | Yes | Yes — and ownership cannot be reassigned |
+
+Covered by 12 tests in `Acceptance/WriteTenantIsolationTests.cs`, symmetric to the existing
+read-path tests. Full account in `ai-prompts/debugging.md` #10.
+
+**Remaining limitation:** there is no global database query filter on `CompanyId`, so the guarantee
+rests on every service scoping its own queries rather than on the data layer.
+
+## Not covered by any criterion
+
+Delivered but with **no acceptance criterion**, stated or inferred, because they are known gaps
+rather than finished behaviour:
+
+| Gap | Where recorded |
+| --- | --- |
+| **No global database query filter on `CompanyId`** — isolation depends on every service scoping its own queries. Reads and writes are both isolated and tested (see criterion 16), but the guarantee is by convention rather than structural | `data-model.md`, `requirements-analysis.md` |
+| No customer detail page — search results link to the list instead | `ui-flow.md` |
+| Quotations have no status lifecycle, and cannot be edited or deleted | `README.md` |
+| Quotation-number allocation has a read-then-write race | `api-contract.md` |
+| Roles are seeded but no controller restricts by role | `README.md` |
+| Registration, password reset and user management do not exist | by design — Core scope |

@@ -3,12 +3,17 @@ using InventoryErp.Domain.Enums;
 
 namespace InventoryErp.Application.DTOs.Products;
 
+/// <summary>
+/// Input for creating a product.
+/// </summary>
+/// <remarks>
+/// <b>There is deliberately no <c>CompanyId</c> here.</b> The owning tenant is supplied as an
+/// explicit argument to the service by the composition root, resolved from the signed-in user.
+/// Binding it from the request would let a caller create records under another company by editing
+/// a form field — a hole that existed until it was caught in review.
+/// </remarks>
 public class CreateProductRequest
 {
-    [Required]
-    [Display(Name = "Company")]
-    public Guid CompanyId { get; set; }
-
     [Required, StringLength(200, MinimumLength = 1)]
     public string Name { get; set; } = string.Empty;
 

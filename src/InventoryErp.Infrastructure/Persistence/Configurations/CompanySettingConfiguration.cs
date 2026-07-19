@@ -27,5 +27,12 @@ public sealed class CompanySettingConfiguration : IEntityTypeConfiguration<Compa
         builder.HasIndex(s => new { s.CompanyId, s.Key })
             .IsUnique()
             .HasFilter("[IsDeleted] = 0");
+
+        // Restrict: a company owning settings must not be deletable out from under them. The
+        // application soft-deletes anyway, so no cascade would ever fire.
+        builder.HasOne<Company>()
+            .WithMany()
+            .HasForeignKey(s => s.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

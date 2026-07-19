@@ -6,7 +6,8 @@ namespace InventoryErp.Application.DTOs.Quotations;
 /// </summary>
 public sealed class CreateQuotationRequest
 {
-    public Guid CompanyId { get; set; }
+    // No CompanyId: the owning tenant is an explicit service argument resolved from the
+    // signed-in user, never bound from the request. See CreateProductRequest for the reasoning.
 
     public Guid CustomerId { get; set; }
 

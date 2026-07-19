@@ -4,6 +4,14 @@ using InventoryErp.Domain.Common;
 
 namespace InventoryErp.Application.Interfaces;
 
+/// <summary>
+/// Product read and write operations.
+/// </summary>
+/// <remarks>
+/// Every method takes <c>companyId</c> explicitly, and no request DTO carries one. The tenant is
+/// always supplied by the caller from the signed-in user's company, never accepted from client
+/// input — see <c>design-notes.md</c>.
+/// </remarks>
 public interface IProductService
 {
     /// <summary>
@@ -30,11 +38,33 @@ public interface IProductService
         int pageSize = 20,
         CancellationToken cancellationToken = default);
 
-    Task<ServiceResult<ProductDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// A single product, or <c>NotFound</c> if it does not exist <b>within that company</b>.
+    /// Another tenant's product is indistinguishable from a non-existent one.
+    /// </summary>
+    Task<ServiceResult<ProductDto>> GetByIdAsync(
+        Guid id,
+        Guid companyId,
+        CancellationToken cancellationToken = default);
 
-    Task<ServiceResult<ProductDto>> CreateAsync(CreateProductRequest request, CancellationToken cancellationToken = default);
+    /// <summary>Creates a product owned by <paramref name="companyId"/>.</summary>
+    Task<ServiceResult<ProductDto>> CreateAsync(
+        Guid companyId,
+        CreateProductRequest request,
+        CancellationToken cancellationToken = default);
 
-    Task<ServiceResult<ProductDto>> UpdateAsync(UpdateProductRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Updates a product belonging to <paramref name="companyId"/>. The owning company is never
+    /// changed, so a product cannot be moved between tenants.
+    /// </summary>
+    Task<ServiceResult<ProductDto>> UpdateAsync(
+        Guid companyId,
+        UpdateProductRequest request,
+        CancellationToken cancellationToken = default);
 
-    Task<ServiceResult> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Soft-deletes a product belonging to <paramref name="companyId"/>.</summary>
+    Task<ServiceResult> DeleteAsync(
+        Guid id,
+        Guid companyId,
+        CancellationToken cancellationToken = default);
 }

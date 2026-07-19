@@ -205,4 +205,61 @@ duplicating it would create two sources of truth that could disagree.
 - **`Product.Barcode` uniqueness undecided.**
 - Application services, DTOs and UI exist only for `Product`.
 
+> **Later note.** The gaps above describe the state *at this step* and are left unedited as a record
+> of it. Several were closed subsequently — seed data in Entry 6, and the tenant-isolation gap at
+> final review, where `CompanyId` turned out to be client-suppliable and was removed from the
+> request DTOs entirely. See `debugging-notes.md` #10 and `data-model.md` for the current position.
+>
+> The relationship table above is also incomplete in hindsight: it lists three relationships and no
+> `Company` ones, which is exactly the omission Entry 6 corrects.
+
+---
+
+## Entry 6 — 2026-07-19 — `CompanyId` foreign keys
+
+**Goal:** answer "does the `CompanyId` security fix need a migration?" — and act on what checking
+that turned up.
+
+**The answer was no.** That fix touched request DTOs, service signatures, controllers and views;
+no entity property or `IEntityTypeConfiguration` changed, so a generated migration would have had an
+empty `Up()`.
+
+**But verifying that exposed a real gap.** Querying `sys.foreign_keys` showed only three domain
+foreign keys — none on any `CompanyId` column. Because the entities have no navigation properties,
+EF inferred no `Company` relationship and none was ever configured explicitly. The tables carried an
+index on `CompanyId` with no constraint behind it.
+
+### Work completed
+
+1. Configured `HasOne<Company>().WithMany().HasForeignKey(…).OnDelete(DeleteBehavior.Restrict)` on
+   `ProductConfiguration`, `CustomerConfiguration`, `QuotationConfiguration` and
+   `CompanySettingConfiguration` — the same reference-less overload already used for
+   Quotation→Customer.
+2. Migration `20260719070445_AddCompanyForeignKeys`. Generated `Up()` inspected before applying:
+   exactly four `AddForeignKey` calls, all `Restrict`, no `CreateIndex` or `AlterColumn`.
+   Pre-checked for orphans first — zero across all four tables.
+3. Documented on `Product.CompanyId` why the property must stay while remaining absent from the
+   request DTOs, so it is not "tidied up" later.
+
+### Verification
+
+The in-memory test provider ignores foreign keys, so the suite could not prove any of this — all
+checks were run against real SQL Server.
+
+| Check | Result |
+| --- | --- |
+| `dotnet build` | 0 warnings |
+| Constraints created | 4 × `FK_*_Companies_CompanyId` |
+| Insert with non-existent `CompanyId` | Rejected, error 547 |
+| Insert with real `CompanyId` | Succeeds (rolled back) |
+| `DELETE FROM Companies` with records present | Blocked by `Restrict`, error 547 |
+| `dotnet test` | 185 passed, 0 failed |
+| UI smoke | Product `FK-SMOKE-1` and quotation `QT-2026-0002` created; both landed with the correct server-derived `CompanyId` |
+
+### Scope, stated plainly
+
+This closes *forged and orphan* tenant ids. It does **not** stop one real company's id reaching
+another's rows — the FK is satisfied either way. Tenant **scoping** is still application-only; the
+global query filter remains the outstanding item.
+
 ---

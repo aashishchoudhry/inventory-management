@@ -17,6 +17,7 @@ public interface IQuotationService
     /// Otherwise <c>Success</c> with the created quotation, including its computed totals.
     /// </returns>
     Task<ServiceResult<QuotationDto>> CreateQuotationAsync(
+        Guid companyId,
         CreateQuotationRequest request,
         CancellationToken cancellationToken = default);
 

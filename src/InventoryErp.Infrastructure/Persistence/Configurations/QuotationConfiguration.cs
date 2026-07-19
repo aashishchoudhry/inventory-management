@@ -40,5 +40,12 @@ public sealed class QuotationConfiguration : IEntityTypeConfiguration<Quotation>
             .WithMany()
             .HasForeignKey(q => q.CustomerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Restrict: a company owning quotations must not be deletable out from under them. The
+        // application soft-deletes anyway, so no cascade would ever fire.
+        builder.HasOne<Company>()
+            .WithMany()
+            .HasForeignKey(q => q.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

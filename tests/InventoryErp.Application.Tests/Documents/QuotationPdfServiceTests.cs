@@ -64,9 +64,8 @@ public class QuotationPdfServiceTests : IDisposable
 
         _companyId = company.Id;
 
-        var created = await quotations.CreateQuotationAsync(new CreateQuotationRequest
+        var created = await quotations.CreateQuotationAsync(company.Id, new CreateQuotationRequest
         {
-            CompanyId = company.Id,
             CustomerId = customer.Id,
             QuotationDate = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
             Lines =

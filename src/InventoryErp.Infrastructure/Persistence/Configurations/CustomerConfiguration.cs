@@ -32,5 +32,12 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasFilter("[IsDeleted] = 0 AND [Code] IS NOT NULL");
 
         builder.HasIndex(c => c.CompanyId);
+
+        // Restrict: a company owning customers must not be deletable out from under them. The
+        // application soft-deletes anyway, so no cascade would ever fire.
+        builder.HasOne<Company>()
+            .WithMany()
+            .HasForeignKey(c => c.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

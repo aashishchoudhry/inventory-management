@@ -35,10 +35,16 @@ public sealed class QuotationService : IQuotationService
     // ------------------------------------------------------------------ create
 
     public async Task<ServiceResult<QuotationDto>> CreateQuotationAsync(
+        Guid companyId,
         CreateQuotationRequest request,
         CancellationToken cancellationToken = default)
     {
         var errors = ValidateShape(request);
+
+        if (companyId == Guid.Empty)
+        {
+            errors.Insert(0, "A company must be specified.");
+        }
 
         if (errors.Count > 0)
         {
@@ -49,7 +55,7 @@ public sealed class QuotationService : IQuotationService
         // tenant must read as "does not exist", not as a usable reference.
         var customer = await Customers.GetByIdAsync(request.CustomerId, cancellationToken);
 
-        if (customer is null || customer.CompanyId != request.CompanyId)
+        if (customer is null || customer.CompanyId != companyId)
         {
             return ServiceResult<QuotationDto>.NotFound(
                 $"No customer with id '{request.CustomerId}' in this company.");
@@ -59,7 +65,7 @@ public sealed class QuotationService : IQuotationService
 
         // One query for every referenced product, rather than one per line.
         var products = (await Products.ListPagedAsync(
-                predicate: p => productIds.Contains(p.Id) && p.CompanyId == request.CompanyId,
+                predicate: p => productIds.Contains(p.Id) && p.CompanyId == companyId,
                 orderBy: p => p.Name,
                 pageNumber: 1,
                 pageSize: Math.Max(productIds.Count, 1),
@@ -76,7 +82,7 @@ public sealed class QuotationService : IQuotationService
         }
 
         var quotationNumber = await GenerateQuotationNumberAsync(
-            request.CompanyId, request.QuotationDate, cancellationToken);
+            companyId, request.QuotationDate, cancellationToken);
 
         if (quotationNumber is null)
         {
@@ -88,7 +94,7 @@ public sealed class QuotationService : IQuotationService
         // saved — the whole graph is written in one SaveChanges.
         var quotation = new Quotation
         {
-            CompanyId = request.CompanyId,
+            CompanyId = companyId,
             QuotationNumber = quotationNumber,
             CustomerId = request.CustomerId,
             QuotationDate = request.QuotationDate,
@@ -296,11 +302,6 @@ public sealed class QuotationService : IQuotationService
     private static List<string> ValidateShape(CreateQuotationRequest request)
     {
         var errors = new List<string>();
-
-        if (request.CompanyId == Guid.Empty)
-        {
-            errors.Add("A company must be specified.");
-        }
 
         if (request.CustomerId == Guid.Empty)
         {

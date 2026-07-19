@@ -55,7 +55,6 @@ public class QuotationServiceTests : IDisposable
 
     private CreateQuotationRequest NewRequest(params CreateQuotationLineRequest[] lines) => new()
     {
-        CompanyId = CompanyA,
         CustomerId = _customerId,
         QuotationDate = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
         ValidUntil = new DateTime(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc),
@@ -77,7 +76,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Creates_the_quotation_and_its_lines()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest());
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, await _context.Quotations.CountAsync());
@@ -89,7 +88,7 @@ public class QuotationServiceTests : IDisposable
     public async Task Computes_header_totals_from_the_lines()
     {
         // 10 × 100 = 1000 gross, 10% off = 100, taxable 900, GST 18% = 162 → 1062.
-        var result = await _service.CreateQuotationAsync(NewRequest());
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest());
         var q = result.Data!;
 
         Assert.Equal(1000m, q.SubTotal);
@@ -101,7 +100,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Header_total_equals_the_sum_of_line_totals()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 7, UnitPrice = 425m, DiscountPercent = 12.5m, GstPercent = 12m },
             new CreateQuotationLineRequest { ProductId = _otherProductId, Quantity = 3, UnitPrice = 1890m, DiscountPercent = 0m, GstPercent = 28m },
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 1, UnitPrice = 8499m, DiscountPercent = 5m, GstPercent = 18m }));
@@ -119,7 +118,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Persists_the_computed_amounts_on_each_line()
     {
-        await _service.CreateQuotationAsync(NewRequest());
+        await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         var line = await _context.QuotationLines.SingleAsync();
 
@@ -132,7 +131,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Links_every_line_to_its_parent_quotation()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 1, UnitPrice = 10m },
             new CreateQuotationLineRequest { ProductId = _otherProductId, Quantity = 2, UnitPrice = 20m }));
 
@@ -147,7 +146,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Allocates_the_first_number_of_the_year()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest());
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         Assert.Equal("QT-2026-0001", result.Data!.QuotationNumber);
     }
@@ -155,9 +154,9 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Increments_the_sequence_for_each_quotation()
     {
-        var first = await _service.CreateQuotationAsync(NewRequest());
-        var second = await _service.CreateQuotationAsync(NewRequest());
-        var third = await _service.CreateQuotationAsync(NewRequest());
+        var first = await _service.CreateQuotationAsync(CompanyA, NewRequest());
+        var second = await _service.CreateQuotationAsync(CompanyA, NewRequest());
+        var third = await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         Assert.Equal("QT-2026-0001", first.Data!.QuotationNumber);
         Assert.Equal("QT-2026-0002", second.Data!.QuotationNumber);
@@ -167,13 +166,13 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Sequence_is_per_year()
     {
-        await _service.CreateQuotationAsync(NewRequest());
+        await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         var next = NewRequest();
         next.QuotationDate = new DateTime(2027, 1, 2, 0, 0, 0, DateTimeKind.Utc);
         next.ValidUntil = null;
 
-        var result = await _service.CreateQuotationAsync(next);
+        var result = await _service.CreateQuotationAsync(CompanyA, next);
 
         Assert.Equal("QT-2027-0001", result.Data!.QuotationNumber);
     }
@@ -181,7 +180,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Sequence_is_per_company()
     {
-        await _service.CreateQuotationAsync(NewRequest());
+        await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         // A second company starts its own sequence at 0001.
         var customerB = new Customer { CompanyId = CompanyB, Name = "Other Co" };
@@ -190,9 +189,8 @@ public class QuotationServiceTests : IDisposable
         _context.Products.Add(productB);
         await _context.SaveChangesAsync();
 
-        var result = await _service.CreateQuotationAsync(new CreateQuotationRequest
+        var result = await _service.CreateQuotationAsync(CompanyB, new CreateQuotationRequest
         {
-            CompanyId = CompanyB,
             CustomerId = customerB.Id,
             QuotationDate = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
             Lines = [new CreateQuotationLineRequest { ProductId = productB.Id, Quantity = 1, UnitPrice = 5m }],
@@ -209,7 +207,7 @@ public class QuotationServiceTests : IDisposable
         var request = NewRequest();
         request.Lines = [];
 
-        var result = await _service.CreateQuotationAsync(request);
+        var result = await _service.CreateQuotationAsync(CompanyA, request);
 
         Assert.Equal(ResultStatus.ValidationFailed, result.Status);
         Assert.Contains(result.ValidationErrors, e => e.Contains("at least one line"));
@@ -221,7 +219,7 @@ public class QuotationServiceTests : IDisposable
     [InlineData(-1)]
     public async Task Rejects_a_non_positive_quantity(int quantity)
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = quantity, UnitPrice = 10m }));
 
         Assert.Equal(ResultStatus.ValidationFailed, result.Status);
@@ -231,7 +229,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Reports_the_offending_line_number()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 5, UnitPrice = 10m },
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 0, UnitPrice = 10m }));
 
@@ -241,7 +239,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Rejects_a_negative_unit_price()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 1, UnitPrice = -1m }));
 
         Assert.Equal(ResultStatus.ValidationFailed, result.Status);
@@ -252,7 +250,7 @@ public class QuotationServiceTests : IDisposable
     [InlineData(101)]
     public async Task Rejects_an_out_of_range_discount(decimal discountPercent)
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest
             {
                 ProductId = _productId, Quantity = 1, UnitPrice = 10m, DiscountPercent = discountPercent,
@@ -267,7 +265,7 @@ public class QuotationServiceTests : IDisposable
         var request = NewRequest();
         request.ValidUntil = request.QuotationDate.AddDays(-1);
 
-        var result = await _service.CreateQuotationAsync(request);
+        var result = await _service.CreateQuotationAsync(CompanyA, request);
 
         Assert.Equal(ResultStatus.ValidationFailed, result.Status);
     }
@@ -280,7 +278,7 @@ public class QuotationServiceTests : IDisposable
         var request = NewRequest();
         request.CustomerId = Guid.NewGuid();
 
-        var result = await _service.CreateQuotationAsync(request);
+        var result = await _service.CreateQuotationAsync(CompanyA, request);
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
         Assert.Equal(0, await _context.Quotations.CountAsync());
@@ -289,7 +287,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task Returns_NotFound_for_an_unknown_product()
     {
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = Guid.NewGuid(), Quantity = 1, UnitPrice = 10m }));
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
@@ -306,7 +304,7 @@ public class QuotationServiceTests : IDisposable
         var request = NewRequest();
         request.CustomerId = foreign.Id;
 
-        var result = await _service.CreateQuotationAsync(request);
+        var result = await _service.CreateQuotationAsync(CompanyA, request);
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
     }
@@ -318,7 +316,7 @@ public class QuotationServiceTests : IDisposable
         _context.Products.Add(foreign);
         await _context.SaveChangesAsync();
 
-        var result = await _service.CreateQuotationAsync(NewRequest(
+        var result = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = foreign.Id, Quantity = 1, UnitPrice = 10m }));
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
@@ -330,7 +328,7 @@ public class QuotationServiceTests : IDisposable
         var request = NewRequest();
         request.Lines = [];
 
-        await _service.CreateQuotationAsync(request);
+        await _service.CreateQuotationAsync(CompanyA, request);
 
         Assert.Equal(0, await _context.Quotations.CountAsync());
         Assert.Equal(0, await _context.QuotationLines.CountAsync());
@@ -351,7 +349,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task GetAllAsync_projects_customer_name_and_line_count()
     {
-        await _service.CreateQuotationAsync(NewRequest(
+        await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest { ProductId = _productId, Quantity = 1, UnitPrice = 10m },
             new CreateQuotationLineRequest { ProductId = _otherProductId, Quantity = 2, UnitPrice = 20m }));
 
@@ -369,12 +367,12 @@ public class QuotationServiceTests : IDisposable
         var older = NewRequest();
         older.QuotationDate = new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc);
         older.ValidUntil = null;
-        await _service.CreateQuotationAsync(older);
+        await _service.CreateQuotationAsync(CompanyA, older);
 
         var newer = NewRequest();
         newer.QuotationDate = new DateTime(2026, 9, 9, 0, 0, 0, DateTimeKind.Utc);
         newer.ValidUntil = null;
-        await _service.CreateQuotationAsync(newer);
+        await _service.CreateQuotationAsync(CompanyA, newer);
 
         var items = (await _service.GetAllAsync(CompanyA)).Data!.Items;
 
@@ -384,7 +382,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task GetAllAsync_does_not_leak_across_companies()
     {
-        await _service.CreateQuotationAsync(NewRequest());
+        await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         var result = await _service.GetAllAsync(CompanyB);
 
@@ -407,7 +405,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_returns_the_quotation_with_its_lines_and_names()
     {
-        var created = await _service.CreateQuotationAsync(NewRequest(
+        var created = await _service.CreateQuotationAsync(CompanyA, NewRequest(
             new CreateQuotationLineRequest
             {
                 ProductId = _productId, Quantity = 10, UnitPrice = 100m,
@@ -429,7 +427,7 @@ public class QuotationServiceTests : IDisposable
     public async Task GetByIdAsync_recomputes_gross_and_discount_for_display()
     {
         // Neither is persisted on the line — they must be derived on read.
-        var created = await _service.CreateQuotationAsync(NewRequest());
+        var created = await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         var line = (await _service.GetByIdAsync(created.Data!.Id, CompanyA)).Data!.Lines.Single();
 
@@ -448,7 +446,7 @@ public class QuotationServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_treats_another_companys_quotation_as_not_found()
     {
-        var created = await _service.CreateQuotationAsync(NewRequest());
+        var created = await _service.CreateQuotationAsync(CompanyA, NewRequest());
 
         var result = await _service.GetByIdAsync(created.Data!.Id, CompanyB);
 

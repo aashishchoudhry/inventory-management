@@ -483,12 +483,18 @@ and modals, and `prefers-reduced-motion` honoured for all transitions.
 
 ## Known UI gaps
 
-- **`CompanyId` is a user-editable text field** on the Create form. A user can type any Guid and
-  write into another tenant's data. Now visually marked as provisional, but the underlying
-  tenant-isolation problem is unchanged — this is a backend gap, not a styling one.
-- No company, customer or quotation screens.
-- Product search/filter is **client-side over all rows**; there is no server-side pagination or
-  sorting, so this will not scale past a few hundred products.
-- Dashboard covers products only — `Customer` and `Quotation` have no application services to
-  aggregate.
+- **No customer detail page.** Search results and the customer list have no per-record view, so a
+  customer hit links to the list instead. Handled explicitly in `SearchResultRoutes.HasDetailPage`
+  so it reads "View list" rather than producing a dead link.
+- **No customer create/edit, and no company screens** beyond Settings.
+- **Quotations cannot be edited or deleted**, and have no status lifecycle — the detail view infers
+  "Expired" from `ValidUntil` alone.
+- **No column sorting** on any table; order is fixed per screen.
+- **Search has no relevance ranking** — an exact SKU match sorts no higher than a loose name match.
+- **The PDF layout has never been visually reviewed** — no renderer is available in the development
+  environment, so verification was structural only.
+
+> An earlier entry here described `CompanyId` as a user-editable field on the product Create form.
+> That field was removed at final review, along with the hidden one on Edit — the tenant is now
+> resolved server-side and cannot be supplied by the client. See `debugging-notes.md` #10.
 - No column sorting on the products table.

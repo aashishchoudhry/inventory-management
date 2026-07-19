@@ -38,7 +38,6 @@ public class ProductServiceTests : IDisposable
         string name = "Widget",
         string? barcode = "8901234567890") => new()
     {
-        CompanyId = companyId ?? CompanyA,
         Name = name,
         Sku = sku,
         Barcode = barcode,
@@ -52,7 +51,7 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task CreateAsync_persists_the_product_and_returns_it()
     {
-        var result = await _service.CreateAsync(NewRequest());
+        var result = await _service.CreateAsync(CompanyA, NewRequest());
 
         Assert.True(result.IsSuccess);
         Assert.Equal("SKU-001", result.Data!.Sku);
@@ -65,9 +64,9 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task CreateAsync_allows_the_same_sku_in_a_different_company()
     {
-        await _service.CreateAsync(NewRequest(companyId: CompanyA));
+        await _service.CreateAsync(CompanyA, NewRequest());
 
-        var result = await _service.CreateAsync(NewRequest(companyId: CompanyB));
+        var result = await _service.CreateAsync(CompanyB, NewRequest());
 
         Assert.True(result.IsSuccess);
         Assert.Equal(CompanyB, result.Data!.CompanyId);
@@ -77,9 +76,9 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task CreateAsync_returns_Conflict_for_a_duplicate_sku()
     {
-        await _service.CreateAsync(NewRequest());
+        await _service.CreateAsync(CompanyA, NewRequest());
 
-        var result = await _service.CreateAsync(NewRequest());
+        var result = await _service.CreateAsync(CompanyA, NewRequest());
 
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultStatus.Conflict, result.Status);
@@ -89,7 +88,7 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task CreateAsync_returns_Invalid_for_a_blank_sku()
     {
-        var result = await _service.CreateAsync(NewRequest("   "));
+        var result = await _service.CreateAsync(CompanyA, NewRequest("   "));
 
         Assert.Equal(ResultStatus.ValidationFailed, result.Status);
         Assert.NotEmpty(result.ValidationErrors);
@@ -98,7 +97,7 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_returns_NotFound_for_an_unknown_id()
     {
-        var result = await _service.GetByIdAsync(Guid.NewGuid());
+        var result = await _service.GetByIdAsync(Guid.NewGuid(), CompanyA);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultStatus.NotFound, result.Status);
@@ -108,12 +107,11 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_changes_the_stored_values()
     {
-        var created = await _service.CreateAsync(NewRequest());
+        var created = await _service.CreateAsync(CompanyA, NewRequest());
 
-        var result = await _service.UpdateAsync(new UpdateProductRequest
+        var result = await _service.UpdateAsync(CompanyA, new UpdateProductRequest
         {
             Id = created.Data!.Id,
-            CompanyId = CompanyA,
             Name = "Renamed widget",
             Sku = "SKU-002",
             SellingPrice = 29.99m,
@@ -132,9 +130,9 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task DeleteAsync_soft_deletes_and_hides_the_product()
     {
-        var created = await _service.CreateAsync(NewRequest());
+        var created = await _service.CreateAsync(CompanyA, NewRequest());
 
-        var deleted = await _service.DeleteAsync(created.Data!.Id);
+        var deleted = await _service.DeleteAsync(created.Data!.Id, CompanyA);
         var all = await _service.GetAllAsync(CompanyA);
 
         Assert.True(deleted.IsSuccess);
@@ -147,8 +145,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task GetAllAsync_returns_only_the_requested_companys_products()
     {
-        await _service.CreateAsync(NewRequest("SKU-A", CompanyA));
-        await _service.CreateAsync(NewRequest("SKU-B", CompanyB));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A"));
+        await _service.CreateAsync(CompanyB, NewRequest("SKU-B"));
 
         var result = await _service.GetAllAsync(CompanyA);
 
@@ -163,7 +161,7 @@ public class ProductServiceTests : IDisposable
     {
         for (var i = 1; i <= 5; i++)
         {
-            await _service.CreateAsync(NewRequest($"SKU-{i:D3}"));
+            await _service.CreateAsync(CompanyA, NewRequest($"SKU-{i:D3}"));
         }
 
         var result = await _service.GetAllAsync(CompanyA, pageNumber: 2, pageSize: 2);
@@ -182,8 +180,8 @@ public class ProductServiceTests : IDisposable
     [InlineData(null)]
     public async Task SearchAsync_with_a_blank_keyword_returns_everything(string? keyword)
     {
-        await _service.CreateAsync(NewRequest("SKU-A"));
-        await _service.CreateAsync(NewRequest("SKU-B"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-B"));
 
         var result = await _service.SearchAsync(CompanyA, keyword);
 
@@ -216,8 +214,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_matches_on_name()
     {
-        await _service.CreateAsync(NewRequest("SKU-A", name: "Hex Bolt M10"));
-        await _service.CreateAsync(NewRequest("SKU-B", name: "Safety Helmet"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A", name: "Hex Bolt M10"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-B", name: "Safety Helmet"));
 
         var result = await _service.SearchAsync(CompanyA, "helmet");
 
@@ -229,8 +227,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_matches_on_sku()
     {
-        await _service.CreateAsync(NewRequest("FST-HB-M10"));
-        await _service.CreateAsync(NewRequest("PPE-HLM-YEL"));
+        await _service.CreateAsync(CompanyA, NewRequest("FST-HB-M10"));
+        await _service.CreateAsync(CompanyA, NewRequest("PPE-HLM-YEL"));
 
         var result = await _service.SearchAsync(CompanyA, "PPE");
 
@@ -241,8 +239,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_matches_on_barcode()
     {
-        await _service.CreateAsync(NewRequest("SKU-A", barcode: "8901234500017"));
-        await _service.CreateAsync(NewRequest("SKU-B", barcode: "8901234500024"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A", barcode: "8901234500017"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-B", barcode: "8901234500024"));
 
         var result = await _service.SearchAsync(CompanyA, "500024");
 
@@ -254,7 +252,7 @@ public class ProductServiceTests : IDisposable
     public async Task SearchAsync_tolerates_products_with_no_barcode()
     {
         // Guards the null-check in the predicate: without it this throws rather than returning.
-        await _service.CreateAsync(NewRequest("SKU-A", barcode: null));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A", barcode: null));
 
         var result = await _service.SearchAsync(CompanyA, "890");
 
@@ -265,8 +263,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_does_not_leak_across_companies()
     {
-        await _service.CreateAsync(NewRequest("SKU-A", CompanyA, name: "Shared Widget"));
-        await _service.CreateAsync(NewRequest("SKU-B", CompanyB, name: "Shared Widget"));
+        await _service.CreateAsync(CompanyA, NewRequest("SKU-A", name: "Shared Widget"));
+        await _service.CreateAsync(CompanyB, NewRequest("SKU-B", name: "Shared Widget"));
 
         var result = await _service.SearchAsync(CompanyA, "Shared");
 
@@ -277,7 +275,7 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_returns_an_empty_page_when_nothing_matches()
     {
-        await _service.CreateAsync(NewRequest());
+        await _service.CreateAsync(CompanyA, NewRequest());
 
         var result = await _service.SearchAsync(CompanyA, "no-such-product");
 
@@ -289,8 +287,8 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task SearchAsync_excludes_soft_deleted_products()
     {
-        var created = await _service.CreateAsync(NewRequest("SKU-A", name: "Deletable"));
-        await _service.DeleteAsync(created.Data!.Id);
+        var created = await _service.CreateAsync(CompanyA, NewRequest("SKU-A", name: "Deletable"));
+        await _service.DeleteAsync(created.Data!.Id, CompanyA);
 
         var result = await _service.SearchAsync(CompanyA, "Deletable");
 
@@ -300,7 +298,7 @@ public class ProductServiceTests : IDisposable
     [Fact]
     public async Task DeleteAsync_returns_NotFound_for_an_unknown_id()
     {
-        var result = await _service.DeleteAsync(Guid.NewGuid());
+        var result = await _service.DeleteAsync(Guid.NewGuid(), CompanyA);
 
         Assert.Equal(ResultStatus.NotFound, result.Status);
     }

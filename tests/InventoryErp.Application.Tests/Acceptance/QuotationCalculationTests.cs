@@ -58,7 +58,6 @@ public class QuotationCalculationTests : IDisposable
 
     private CreateQuotationRequest Request(params CreateQuotationLineRequest[] lines) => new()
     {
-        CompanyId = _companyId,
         CustomerId = _customerId,
         QuotationDate = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
         Lines = lines,
@@ -91,7 +90,7 @@ public class QuotationCalculationTests : IDisposable
     [Fact]
     public async Task Quotation_with_two_lines_produces_the_hand_calculated_totals()
     {
-        var result = await _service.CreateQuotationAsync(Request(
+        var result = await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest
             {
                 ProductId = _hexBoltId, Quantity = 10, UnitPrice = 24.50m,
@@ -116,7 +115,7 @@ public class QuotationCalculationTests : IDisposable
     [Fact]
     public async Task Each_line_produces_its_own_hand_calculated_amounts()
     {
-        var result = await _service.CreateQuotationAsync(Request(
+        var result = await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest
             {
                 ProductId = _hexBoltId, Quantity = 10, UnitPrice = 24.50m,
@@ -145,7 +144,7 @@ public class QuotationCalculationTests : IDisposable
     [Fact]
     public async Task Totals_are_persisted_not_only_returned()
     {
-        await _service.CreateQuotationAsync(Request(
+        await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest
             {
                 ProductId = _hexBoltId, Quantity = 10, UnitPrice = 24.50m,
@@ -171,7 +170,7 @@ public class QuotationCalculationTests : IDisposable
     {
         // Pins the order of operations. Taxing the gross would give 44.10 rather than 39.69 —
         // a 4.41 overstatement on this line alone, and wrong on every discounted invoice.
-        var result = await _service.CreateQuotationAsync(Request(
+        var result = await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest
             {
                 ProductId = _hexBoltId, Quantity = 10, UnitPrice = 24.50m,
@@ -190,7 +189,7 @@ public class QuotationCalculationTests : IDisposable
     [InlineData(-100)]
     public async Task A_line_with_a_non_positive_quantity_is_rejected(int quantity)
     {
-        var result = await _service.CreateQuotationAsync(Request(
+        var result = await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest
             {
                 ProductId = _hexBoltId, Quantity = quantity, UnitPrice = 24.50m,
@@ -204,7 +203,7 @@ public class QuotationCalculationTests : IDisposable
     [Fact]
     public async Task A_rejected_quotation_writes_nothing_to_the_database()
     {
-        await _service.CreateQuotationAsync(Request(
+        await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest { ProductId = _hexBoltId, Quantity = 5, UnitPrice = 10m },
             new CreateQuotationLineRequest { ProductId = _helmetId, Quantity = 0, UnitPrice = 10m }));
 
@@ -216,7 +215,7 @@ public class QuotationCalculationTests : IDisposable
     [Fact]
     public async Task The_rejection_message_identifies_which_line_is_wrong()
     {
-        var result = await _service.CreateQuotationAsync(Request(
+        var result = await _service.CreateQuotationAsync(_companyId, Request(
             new CreateQuotationLineRequest { ProductId = _hexBoltId, Quantity = 5, UnitPrice = 10m },
             new CreateQuotationLineRequest { ProductId = _helmetId, Quantity = 0, UnitPrice = 10m }));
 

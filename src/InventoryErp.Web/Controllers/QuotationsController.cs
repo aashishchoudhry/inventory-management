@@ -147,9 +147,9 @@ public class QuotationsController : Controller
         }
 
         var result = await _quotationService.CreateQuotationAsync(
+            companyId.Value,
             new CreateQuotationRequest
             {
-                CompanyId = companyId.Value,
                 CustomerId = model.CustomerId ?? Guid.Empty,
                 QuotationDate = model.QuotationDate,
                 ValidUntil = model.ValidUntil,
