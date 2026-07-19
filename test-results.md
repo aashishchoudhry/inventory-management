@@ -2,12 +2,97 @@
 
 Last run: **2026-07-18**, against SQL Server 2022 local default instance.
 
+## `dotnet test` output
+
+```
+Determining projects to restore...
+All projects are up-to-date for restore.
+  InventoryErp.Shared -> src\InventoryErp.Shared\bin\Debug\net10.0\InventoryErp.Shared.dll
+  InventoryErp.Domain -> src\InventoryErp.Domain\bin\Debug\net10.0\InventoryErp.Domain.dll
+  InventoryErp.Application -> src\InventoryErp.Application\bin\Debug\net10.0\InventoryErp.Application.dll
+  InventoryErp.Infrastructure -> src\InventoryErp.Infrastructure\bin\Debug\net10.0\InventoryErp.Infrastructure.dll
+  InventoryErp.Application.Tests -> tests\InventoryErp.Application.Tests\bin\Debug\net10.0\InventoryErp.Application.Tests.dll
+Test run for tests\InventoryErp.Application.Tests\bin\Debug\net10.0\InventoryErp.Application.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   173, Skipped:     0, Total:   173, Duration: 7 s
+```
+
+## Mandatory acceptance tests
+
+Both live in `tests/InventoryErp.Application.Tests/Acceptance/`, deliberately separate from the
+per-service suites so they are easy to find and run alone
+(`dotnet test --filter "FullyQualifiedName~Acceptance"`).
+
+```
+Passed QuotationCalculationTests.Quotation_with_two_lines_produces_the_hand_calculated_totals
+Passed QuotationCalculationTests.Each_line_produces_its_own_hand_calculated_amounts
+Passed QuotationCalculationTests.Totals_are_persisted_not_only_returned
+Passed QuotationCalculationTests.Gst_is_charged_on_the_discounted_amount_not_the_gross
+Passed QuotationCalculationTests.A_line_with_a_non_positive_quantity_is_rejected(quantity: 0)
+Passed QuotationCalculationTests.A_line_with_a_non_positive_quantity_is_rejected(quantity: -1)
+Passed QuotationCalculationTests.A_line_with_a_non_positive_quantity_is_rejected(quantity: -100)
+Passed QuotationCalculationTests.A_rejected_quotation_writes_nothing_to_the_database
+Passed QuotationCalculationTests.The_rejection_message_identifies_which_line_is_wrong
+Passed SettingsDefaultsTests.No_setting_rows_exist_for_the_company
+Passed SettingsDefaultsTests.GetSettings_returns_the_documented_defaults_when_no_rows_exist
+Passed SettingsDefaultsTests.Unset_optional_fields_come_back_empty_never_null
+Passed SettingsDefaultsTests.A_stored_row_overrides_the_default
+Passed SettingsDefaultsTests.Pdf_generates_with_no_settings_at_all
+Passed SettingsDefaultsTests.Pdf_generates_with_only_some_settings_populated
+Passed SettingsDefaultsTests.Pdf_generates_when_every_optional_setting_is_blank
+Passed SettingsDefaultsTests.Pdf_generates_when_the_accent_colour_is_malformed
+Passed SettingsDefaultsTests.Pdf_generates_when_the_logo_path_is_set_but_the_file_is_missing
+```
+
+### 1. Quotation calculation — what it proves
+
+Two products with known inputs, and expected values **hand-calculated in the test file's comments**
+rather than derived from the implementation:
+
+| Line | Qty | Price | Disc | GST | Gross | Discount | Tax | Total |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Hex Bolt | 10 | 24.50 | 10% | 18% | 245.00 | 24.50 | 39.69 | 260.19 |
+| Safety Helmet | 5 | 349.00 | 0% | 5% | 1745.00 | 0.00 | 87.25 | 1832.25 |
+| **Header** | | | | | **1990.00** | **24.50** | **126.94** | **2092.44** |
+
+| Test | Proves |
+| --- | --- |
+| `..._hand_calculated_totals` | All four header figures match arithmetic done by hand |
+| `Each_line_produces_its_own...` | Per-line gross, discount, tax and total are individually right, not merely summing to the right header |
+| `Totals_are_persisted_not_only_returned` | Reads back from the store — a correct DTO over a wrong entity cannot pass |
+| `Gst_is_charged_on_the_discounted_amount...` | Pins the order of operations. Taxing the gross would give 44.10 instead of 39.69 |
+| `..._non_positive_quantity_is_rejected` | 0, −1 and −100 all rejected as `ValidationFailed` |
+| `A_rejected_quotation_writes_nothing...` | One bad line rejects the whole quotation — no partial save |
+| `The_rejection_message_identifies_which_line...` | Error is prefixed `Line 2:`, so a UI can point at the offending row |
+
+These figures independently corroborate the manual browser test: quotation `QT-2026-0001` was
+created through the UI with the same inputs and stored 1990.00 / 24.50 / 126.94 / 2092.44.
+
+### 2. Settings defaults and PDF resilience — what it proves
+
+The fixture is a company with **nothing but its required name** — no setting rows, no optional
+columns.
+
+| Test | Proves |
+| --- | --- |
+| `No_setting_rows_exist_for_the_company` | Establishes the precondition, so the next test cannot pass for the wrong reason |
+| `..._documented_defaults_when_no_rows_exist` | `#4F46E5`, `India`, and both document-text defaults come back exactly as documented in `api-contract.md` |
+| `Unset_optional_fields_come_back_empty_never_null` | Every property is non-null by contract; callers never null-check |
+| `A_stored_row_overrides_the_default` | Precedence works, and untouched keys still default |
+| `Pdf_generates_with_no_settings_at_all` | The PDF reads a fully-defaulted context |
+| `Pdf_generates_with_only_some_settings_populated` | **Partial settings do not crash it** — a realistic half-configured company |
+| `..._when_every_optional_setting_is_blank` | Blank stored values are a different path from absent rows, and also survive |
+| `..._when_the_accent_colour_is_malformed` | A bad colour cannot reach the renderer and throw mid-document |
+| `..._when_the_logo_path_is_set_but_the_file_is_missing` | The restored-backup case degrades to no logo |
+
 ## Summary
 
 | Check | Result |
 | --- | --- |
 | `dotnet build InventoryErp.slnx` | Succeeded — **0 warnings, 0 errors** (warnings-as-errors enabled) |
-| `dotnet test InventoryErp.slnx` | **14 passed, 0 failed, 0 skipped** |
+| `dotnet test InventoryErp.slnx` | **173 passed, 0 failed, 0 skipped** |
+| Mandatory acceptance tests | **18 passed** |
 | `dotnet ef dbcontext info` | Model loads under the SQL Server provider |
 | Schema | 14 tables created (6 domain + 8 ASP.NET Identity) |
 

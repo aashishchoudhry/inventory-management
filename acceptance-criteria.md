@@ -19,6 +19,7 @@
 | 9 | A user can view the quotation list and open a detail view | **Met** | 2026-07-18 |
 | 10 | Backend validation rejects invalid quotations | **Met** | 2026-07-18 |
 | 11 | Global search returns relevant products and customers (and quotations) | **Met** | 2026-07-18 |
+| 12 | Mandatory xUnit tests pass | **Met** | 2026-07-18 |
 
 ### 1. Data persists after an application restart
 
@@ -183,6 +184,35 @@ console errors.
 Covered by 21 service tests, including the 2-character minimum, per-field matching for each type,
 case-insensitivity, and **tenant isolation** — a second company with a same-named customer and
 product never appears in the first company's results.
+
+### 12. Mandatory xUnit tests pass
+
+```
+Passed!  - Failed: 0, Passed: 173, Skipped: 0, Total: 173, Duration: 7 s
+```
+
+Both required scenarios live in `tests/InventoryErp.Application.Tests/Acceptance/` — **18 tests,
+all passing**.
+
+**Quotation calculation.** Two products with known inputs; expected values hand-calculated in the
+test file rather than derived from the implementation:
+
+| | Gross | Discount | Tax | Total |
+| --- | --- | --- | --- | --- |
+| Hex Bolt — 10 @ 24.50, 10% disc, 18% GST | 245.00 | 24.50 | 39.69 | 260.19 |
+| Safety Helmet — 5 @ 349.00, 0% disc, 5% GST | 1745.00 | 0.00 | 87.25 | 1832.25 |
+| **Header** | **1990.00** | **24.50** | **126.94** | **2092.44** |
+
+Plus: totals verified as *persisted* (read back from the store), GST proven to be charged after
+discount, and zero/negative quantities rejected with nothing written to the database.
+
+**Settings defaults.** A company with only its required name returns every documented default
+(`#4F46E5`, `India`, both document-text strings) and no nulls. The PDF generator then survives every
+degraded settings shape: none at all, partially populated, all-blank values, a malformed accent
+colour, and a logo path whose file is missing.
+
+Full output and a per-test explanation in [test-results.md](test-results.md). Scope boundaries —
+what is deliberately *not* tested — in [test-strategy.md](test-strategy.md).
 
 ## Not yet stated
 
